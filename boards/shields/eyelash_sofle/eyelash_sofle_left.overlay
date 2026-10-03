@@ -32,3 +32,17 @@
 &left_encoder {
     status = "okay";
 };
+
+/ {
+    // Joystick scrolling (layers 1 and 2). Merged by path into the listener the keymap defines,
+    // because the keymap is applied after this overlay. Speed multiplier is adjustable without
+    // reflashing in DYA Studio or https://cormoran.github.io/zmk-module-runtime-input-processor/
+    stick_scroll_input_listener {
+        input-processors = <&scroll_runtime_input_processor>;
+    };
+};
+
+// The module's default scroll scale (1/60) is meant for trackballs; start at 1:1.
+&scroll_runtime_input_processor {
+    scale-divisor = <1>;
+};
