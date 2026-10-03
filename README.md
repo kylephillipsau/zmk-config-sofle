@@ -1,31 +1,23 @@
-# Sofle
+# Kyles Sofle
 
-- [中文](README.md)
-- [English](README_EN.md)
+ZMK config for an Eyelash Sofle. [KYLES_SOFLE.md](KYLES_SOFLE.md) describes what this config changes and how to build it. The rest of this file is the seller's notes from [a741725193/zmk-sofle](https://github.com/a741725193/zmk-sofle), translated.
 
-## 更新列表
+## Seller's updates
 
-- 2024/12/21
-  1. 增加zmk-studio支持（只需要刷新左手即可使用）。
-- 2024/10/24
-  1. 修改供电模式，功耗降低。
-  2. 修正RGB供电自动关闭的功能。
-- 2025/3/30 增加睡眠进入时间1小时  增加防抖时间 优化睡眠后功耗 
-- 2025/8/22
-  1. 更新了soft off。当您同时按下 Q、S 和 Z 键并按住 2 秒钟时，键盘将进入深度睡眠状态，无法通过按键唤醒。携带外出时可以使用此功能。激活方式为按一次复位开关。
-  2. 这个月，我还更新了矮轴版本sofle和corne的外壳。框架和底板加厚了，复位开关的开口也进行了调整，可以轻松按下复位开关。目前，我们仍在构思如何设计带有倾斜支架的外壳。如果您仔细检查过 PCB，您会注意到有用于扩展 IO 的预留接口。不知道有没有人能够使用它们，我会尝试一下！
-  3. 右侧键盘屏幕上的GIF动画被移除，这将显著降低右侧键盘的功耗。
+- 2024-10-24: A new power supply mode lowers power use. The automatic RGB power cut-off is fixed.
+- 2024-12-21: ZMK Studio support. Only the left half needs the new firmware.
+- 2025-03-30: The keyboard sleeps after 1 hour idle, debounce time is longer, and power use while asleep is lower.
+- 2025-08-22: Soft off. Hold Q, S and Z together for 2 seconds to put the keyboard into deep sleep, for example when carrying it. Keys can't wake it; press the reset switch once.
+- 2025-08-22: Thicker frames and base plates for the low-profile Sofle and Corne cases, with a larger opening so the reset switch is easy to press. A tilted case is still in design. The PCB has spare pads for expansion IO.
+- 2025-08-22: The right screen's GIF animation is gone, which cuts the right half's power use considerably.
+- 2026-06-22: The keyboard supports [DYA Studio](https://studio.dya.cormoran.works/), which remaps keys better than ZMK Studio. A Chinese-language installer is available from the seller.
 
--2026/6/22 键盘支持DYA STUDIO改键了中文用户联系店主索取中文版DYA STUDIO安装包。这个上位机软件改键比ZMK studio更好用。
+If your Sofle has firmware from before 2025-08-22, update it.
 
-> 请更新最新的固件。
->
+## Contact
 
-## 联系我
+For the 3D-printable case models, or if the keyboard has a fault, email 380465425@qq.com.
 
-如需3D打印的模型文件或者键盘有任何异常和故障，请联系380465425@qq.com
+## Keymap
 
-## Sofle键位图
-
-![Sofle键位图](keymap-drawer/eyelash_sofle.svg)
-
+![Sofle keymap](keymap-drawer/eyelash_sofle.svg)
