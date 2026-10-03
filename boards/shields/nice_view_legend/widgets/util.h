@@ -33,11 +33,18 @@ struct status_state {
     uint8_t wpm[WPM_HISTORY];
     int16_t peripheral_battery; // -1 until the right half reports its level
     uint8_t mods;               // held modifier keys, MOD_* bits
-    bool caps;
+    uint8_t agent;              // Claude Code state from the host, AGENT_* below
 #else
     bool connected;
 #endif
 };
+
+// Claude Code state, sent by host/sofle-status in the Compose (bit 3) and Kana (bit 4) indicator
+// lights, which macOS doesn't use.
+#define AGENT_IDLE 0
+#define AGENT_WORKING 1
+#define AGENT_NEEDS 2
+#define AGENT_DONE 3
 
 struct battery_status_state {
     uint8_t level;

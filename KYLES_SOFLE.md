@@ -22,6 +22,9 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   its slot is selected.
 - **RGB:** layer 1 + X turns the underglow on in solid red.
 - **Layers** are named BASE / NAV / SYSTEM.
+- **Claude Code status** on the left screen: the ✳ badge lights while Claude is working or waiting
+  on you, and the WPM header turns into a "CLAUDE / NEEDS YOU" (solid) or "CLAUDE / DONE"
+  (outlined) banner. See [Claude Code status](#claude-code-status).
 
 ## Building
 
@@ -37,6 +40,19 @@ GitHub Actions builds the same targets from `build.yaml` on every push.
 
 To flash: plug a half in, double-press its reset button, and copy its `.uf2` onto the `NICENANO`
 drive. Keymap and left-screen changes only need the left half; right-screen art needs the right.
+
+## Claude Code status
+
+`host/sofle-status` sends Claude Code's state to the keyboard in two indicator lights macOS doesn't
+use (Compose and Kana), as a raw HID output report over Bluetooth or USB. The firmware reads them
+like Caps Lock. Install it with `host/install.sh` (builds to `~/.local/bin/sofle-status`).
+
+Claude Code runs `sofle-status hook` asynchronously on SessionStart, SessionEnd, UserPromptSubmit,
+PostToolUse, PermissionRequest, Notification, Stop and StopFailure (configured in
+`~/.claude/settings.json`). It maps each event to idle, working, needs or done, and skips resending
+an unchanged state for 30 seconds. `sofle-status working|needs|done|idle` sets a state by hand.
+
+The keyboard forgets the state when it sleeps; the next event sets it again.
 
 ## Screen art
 

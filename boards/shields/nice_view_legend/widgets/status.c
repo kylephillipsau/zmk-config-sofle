@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  *
  * Left (central) screen: a status area (both batteries, layer, Bluetooth slots, held modifiers,
- * caps lock) above a live WPM chart. The layout mirrors spec_left() in art/concepts.py, and the
+ * Claude Code badge) above a live WPM chart, whose header turns into a Claude Code banner. The layout mirrors spec_left() in art/concepts.py, and the
  * fonts and icons are generated from the same sources, so the mockups match the device.
  *
  * The screen is three 68x68 canvases stacked in portrait order (rows 0-67, 68-135, 136-159),
@@ -87,8 +87,8 @@ struct mods_state {
     uint8_t mods;
 };
 
-struct caps_state {
-    bool caps;
+struct agent_state {
+    uint8_t agent;
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -266,14 +266,15 @@ static void draw_badges(const struct frame *f, const struct status_state *state)
     } badges[] = {
         {&glyph_cmd, MOD_LGUI | MOD_RGUI},  {&glyph_opt, MOD_LALT | MOD_RALT},
         {&glyph_ctrl, MOD_LCTL | MOD_RCTL}, {&glyph_shift, MOD_LSFT | MOD_RSFT},
-        {&glyph_caps, 0},
+        {&glyph_claude, 0},
     };
     lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
 
     for (int i = 0; i < ARRAY_SIZE(badges); i++) {
         const struct glyph *g = badges[i].glyph;
         int x = i * 14;
-        bool on = badges[i].mods ? (state->mods & badges[i].mods) != 0 : state->caps;
+        bool on = badges[i].mods ? (state->mods & badges[i].mods) != 0
+                                 : (state->agent == AGENT_WORKING || state->agent == AGENT_NEEDS);
 
         if (on) {
             fill(f, x, 50, 12, 13, ink);
@@ -314,17 +315,39 @@ static void draw_status(lv_obj_t *widget, struct zmk_widget_status *w) {
  * WPM module (middle and bottom canvases)
  */
 
-static void draw_wpm_into(const struct frame *f, const uint8_t *hist) {
+// The WPM header, or a Claude Code banner while Claude needs you (solid) or has finished (outlined).
+static void draw_agent_header(const struct frame *f, const struct status_state *state) {
     lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
     char number[4];
+
+    if (state->agent == AGENT_NEEDS || state->agent == AGENT_DONE) {
+        bool solid = state->agent == AGENT_NEEDS;
+        lv_color_t text = solid ? paper : ink;
+
+        if (solid) {
+            fill(f, 0, 67, SCREEN_W, 26, ink);
+        } else {
+            outline(f, 0, 67, SCREEN_W, 26, ink);
+        }
+        draw_text(f, &lv_font_jersey_1x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_CENTER, text, "CLAUDE");
+        draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 84, LV_TEXT_ALIGN_CENTER, text,
+                  solid ? "NEEDS YOU" : "DONE");
+        return;
+    }
+
+    draw_text(f, &lv_font_silkscreen_bold_8, 1, 30, 71, LV_TEXT_ALIGN_LEFT, ink, "WPM");
+    snprintf(number, sizeof(number), "%d", state->wpm[WPM_HISTORY - 1]);
+    draw_text(f, &lv_font_jersey_2x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_RIGHT, ink, number);
+}
+
+static void draw_wpm_into(const struct frame *f, const struct status_state *state) {
+    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
+    const uint8_t *hist = state->wpm;
     int hi = 10; // floor for the chart scale, so near-zero typing doesn't fill the chart
     int px[WPM_HISTORY], py[WPM_HISTORY];
 
     fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, paper);
-
-    draw_text(f, &lv_font_silkscreen_bold_8, 1, 30, 71, LV_TEXT_ALIGN_LEFT, ink, "WPM");
-    snprintf(number, sizeof(number), "%d", hist[WPM_HISTORY - 1]);
-    draw_text(f, &lv_font_jersey_2x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_RIGHT, ink, number);
+    draw_agent_header(f, state);
 
     for (int i = 0; i < WPM_HISTORY; i++) {
         hi = MAX(hi, hist[i]);
@@ -356,7 +379,7 @@ static void draw_wpm_into(const struct frame *f, const uint8_t *hist) {
 static void draw_wpm(lv_obj_t *widget, struct zmk_widget_status *w) {
     for (int i = 1; i <= 2; i++) {
         struct frame f = frame_for(widget, w, i);
-        draw_wpm_into(&f, w->state.wpm);
+        draw_wpm_into(&f, &w->state);
         rotate_canvas(f.canvas, f.buf);
     }
 }
@@ -516,26 +539,33 @@ static struct mods_state mods_get_state(const zmk_event_t *eh) {
 ZMK_DISPLAY_WIDGET_LISTENER(widget_mods, struct mods_state, mods_update_cb, mods_get_state)
 ZMK_SUBSCRIPTION(widget_mods, zmk_keycode_state_changed);
 
-static void caps_update_cb(struct caps_state state) {
+static void agent_update_cb(struct agent_state state) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        widget->state.caps = state.caps;
-        draw_status(widget->obj, widget);
+        if (widget->state.agent != state.agent) {
+            widget->state.agent = state.agent;
+            draw_status(widget->obj, widget); // badge
+            draw_wpm(widget->obj, widget);    // banner
+        }
     }
 }
 
-static struct caps_state caps_get_state(const zmk_event_t *eh) {
+// host/sofle-status sends Claude Code's state in the Compose and Kana indicator lights.
+static struct agent_state agent_get_state(const zmk_event_t *eh) {
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    return (struct caps_state){
-        .caps = (zmk_hid_indicators_get_current_profile() & BIT(HID_USAGE_LED_CAPS_LOCK - 1)) != 0};
+    zmk_hid_indicators_t leds = zmk_hid_indicators_get_current_profile();
+    return (struct agent_state){
+        .agent = ((leds & BIT(HID_USAGE_LED_COMPOSE - 1)) ? 1 : 0) |
+                 ((leds & BIT(HID_USAGE_LED_KANA - 1)) ? 2 : 0),
+    };
 #else
-    return (struct caps_state){.caps = false};
+    return (struct agent_state){.agent = AGENT_IDLE};
 #endif
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_caps, struct caps_state, caps_update_cb, caps_get_state)
+ZMK_DISPLAY_WIDGET_LISTENER(widget_agent, struct agent_state, agent_update_cb, agent_get_state)
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-ZMK_SUBSCRIPTION(widget_caps, zmk_hid_indicators_changed);
+ZMK_SUBSCRIPTION(widget_agent, zmk_hid_indicators_changed);
 #endif
 
 static void wpm_status_update_cb(struct wpm_status_state state) {
@@ -576,7 +606,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget_output_status_init();
     widget_layer_status_init();
     widget_mods_init();
-    widget_caps_init();
+    widget_agent_init();
     widget_wpm_status_init();
 
     return 0;

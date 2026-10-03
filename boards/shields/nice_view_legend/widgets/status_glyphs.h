@@ -57,18 +57,18 @@ static const uint16_t glyph_shift_rows[] = {
 };
 static const struct glyph glyph_shift = {9, 8, glyph_shift_rows};
 
-static const uint16_t glyph_caps_rows[] = {
+static const uint16_t glyph_claude_rows[] = {
     0x0010, // ....#....
+    0x0092, // .#..#..#.
+    0x0054, // ..#.#.#..
     0x0038, // ...###...
-    0x007c, // ..#####..
-    0x00fe, // .#######.
-    0x01c7, // ###...###
-    0x0044, // ..#...#..
-    0x007c, // ..#####..
-    0x0000, // .........
-    0x007c, // ..#####..
+    0x01ff, // #########
+    0x0038, // ...###...
+    0x0054, // ..#.#.#..
+    0x0092, // .#..#..#.
+    0x0010, // ....#....
 };
-static const struct glyph glyph_caps = {9, 9, glyph_caps_rows};
+static const struct glyph glyph_claude = {9, 9, glyph_claude_rows};
 
 static const uint16_t glyph_bolt_rows[] = {
     0x0003, // ...##

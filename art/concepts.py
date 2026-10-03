@@ -463,6 +463,18 @@ GEAR = glyph([
 
 LAYER_NAMES = {0: 'BASE', 1: 'NAV', 2: 'SYSTEM'}
 
+CLAUDE_SPARK = glyph([
+    "....#....",
+    ".#..#..#.",
+    "..#.#.#..",
+    "...###...",
+    "#########",
+    "...###...",
+    "..#.#.#..",
+    ".#..#..#.",
+    "....#....",
+])
+
 
 def mini_batt(img, d, x, y, label, level, w=31):
     """Label, percentage and a 10-segment bar in a w-wide column."""
@@ -1074,7 +1086,7 @@ def spec_battery(img, d, x, label, level, charging=False):
 
 
 def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, connected=(1,),
-              bonded=(0, 1, 3), held=(), caps=False, wpm=None):
+              bonded=(0, 1, 3), held=(), caps=False, wpm=None, agent='idle'):
     img, d = new()
     # --- status (top canvas, rows 0..67)
     spec_battery(img, d, 0, 'L', l, charging)
@@ -1103,10 +1115,10 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
                 blit(img, icon, x + (12 - len(icon[0])) // 2, y + (12 - len(icon)) // 2, ink=0 if on else 1)
             else:
                 lv_text(img, 'silkscreen_bold_8', x, 12, y + 3, 'c', str(i + 1), fill=0 if on else 1)
-    mods = [('cmd', CMD), ('opt', OPT), ('ctrl', CTRL), ('shift', SHIFT), ('caps', CAPSLOCK)]
+    mods = [('cmd', CMD), ('opt', OPT), ('ctrl', CTRL), ('shift', SHIFT), ('claude', CLAUDE_SPARK)]
     for i, (name, g) in enumerate(mods):
         x = i * 14
-        on = name in held or (name == 'caps' and caps)
+        on = name in held or (name == 'claude' and agent in ('working', 'needs'))
         if on:
             d.rectangle([x, 50, x + 11, 62], fill=1)
         else:
@@ -1116,8 +1128,7 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
     d.rectangle([0, 65, W - 1, 65], fill=1)
     # --- WPM module (middle + bottom canvases, rows 68..159)
     hist = wpm or [0] * 12 + [12, 30, 44, 51, 38, 47, 63, 58, 66, 61, 70, 74, 69, 58, 64, 72, 77, 71]
-    lv_text(img, 'silkscreen_bold_8', 1, 30, 71, 'l', 'WPM')
-    lv_text(img, 'jersey_2x', 0, W, 71, 'r', str(hist[-1]))
+    spec_agent_header(img, d, agent, hist[-1])
     top, bot = 96, 156
     hi = max(max(hist), 10)
     n = len(hist)
@@ -1134,6 +1145,22 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
         bresenham(px, pts[i], pts[i + 1])
     d.rectangle([0, 157, W - 1, 157], fill=1)
     return img
+
+
+def spec_agent_header(img, d, agent, wpm):
+    """WPM header, or a Claude Code banner (rows 67-92). Mirrors draw_agent_header() in status.c."""
+    if agent in ('needs', 'done'):
+        solid = agent == 'needs'
+        if solid:
+            d.rectangle([0, 67, W - 1, 92], fill=1)
+        else:
+            d.rectangle([0, 67, W - 1, 92], outline=1)
+        ink = 0 if solid else 1
+        lv_text(img, 'jersey_1x', 0, W, 71, 'c', 'CLAUDE', fill=ink)
+        lv_text(img, 'silkscreen_bold_8', 0, W, 84, 'c', 'NEEDS YOU' if solid else 'DONE', fill=ink)
+        return
+    lv_text(img, 'silkscreen_bold_8', 1, 30, 71, 'l', 'WPM')
+    lv_text(img, 'jersey_2x', 0, W, 71, 'r', str(wpm))
 
 
 def bresenham(px, p0, p1):
@@ -1161,6 +1188,9 @@ def render_spec():
         'spec_nav': spec_left(layer='NAV', charging=True, r=-1, held=('cmd', 'shift'), caps=True),
         'spec_usb': spec_left(layer='SYSTEM', usb=True, wpm=[0] * 30),
         'spec_away': spec_left(active=0, connected=()),
+        'spec_agent_working': spec_left(agent='working'),
+        'spec_agent_needs': spec_left(agent='needs'),
+        'spec_agent_done': spec_left(agent='done'),
     }
     for k, im in out.items():
         im.save(f'out/mock_{k}.png')
