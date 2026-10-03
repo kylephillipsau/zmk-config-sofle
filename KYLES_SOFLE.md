@@ -43,16 +43,25 @@ drive. Keymap and left-screen changes only need the left half; right-screen art 
 
 ## Claude Code status
 
-`host/sofle-status` sends Claude Code's state to the keyboard in two indicator lights macOS doesn't
-use (Compose and Kana), as a raw HID output report over Bluetooth or USB. The firmware reads them
-like Caps Lock. Install it with `host/install.sh` (builds to `~/.local/bin/sofle-status`).
+`host/sofle-status` sends three flags to the keyboard in indicator lights macOS doesn't use, as a raw
+HID output report over Bluetooth or USB. The firmware reads them like Caps Lock.
 
-Claude Code runs `sofle-status hook` asynchronously on SessionStart, SessionEnd, UserPromptSubmit,
-PostToolUse, PermissionRequest, Notification, Stop and StopFailure (configured in
-`~/.claude/settings.json`). It maps each event to idle, working, needs or done, and skips resending
-an unchanged state for 30 seconds. `sofle-status working|needs|done|idle` sets a state by hand.
+| Light | Meaning | On screen |
+|---|---|---|
+| Scroll Lock | some session is working | ✳ badge lit |
+| Compose | some session needs you (permission prompt) | solid CLAUDE / NEEDS YOU banner |
+| Kana | a session finished since your last prompt in any session | outlined CLAUDE / DONE banner |
 
-The keyboard forgets the state when it sleeps; the next event sets it again.
+Each Claude Code session keeps its own state in `~/.cache/sofle-status/sessions`, so concurrent
+sessions add up instead of overwriting each other. Claude Code runs `sofle-status hook`
+asynchronously on SessionStart, SessionEnd, UserPromptSubmit, PostToolUse, PermissionRequest,
+Notification, Stop and StopFailure (configured in `~/.claude/settings.json`). States older than 30
+minutes count as stale, and an unchanged result isn't resent for 30 seconds.
+
+Install with `host/install.sh` (builds `~/.local/bin/sofle-status`). Other commands:
+`sofle-status status` shows every session and the combined flags; `sofle-status
+idle|working|needs|done` shows a state by hand and pauses the hooks; `sofle-status resume` restarts
+them. The keyboard forgets the flags when it sleeps; the next event sets them again.
 
 ## Screen art
 

@@ -274,7 +274,7 @@ static void draw_badges(const struct frame *f, const struct status_state *state)
         const struct glyph *g = badges[i].glyph;
         int x = i * 14;
         bool on = badges[i].mods ? (state->mods & badges[i].mods) != 0
-                                 : (state->agent == AGENT_WORKING || state->agent == AGENT_NEEDS);
+                                 : (state->agent & (AGENT_WORKING | AGENT_NEEDS)) != 0;
 
         if (on) {
             fill(f, x, 50, 12, 13, ink);
@@ -320,8 +320,8 @@ static void draw_agent_header(const struct frame *f, const struct status_state *
     lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
     char number[4];
 
-    if (state->agent == AGENT_NEEDS || state->agent == AGENT_DONE) {
-        bool solid = state->agent == AGENT_NEEDS;
+    if (state->agent & (AGENT_NEEDS | AGENT_DONE)) {
+        bool solid = (state->agent & AGENT_NEEDS) != 0; // needs you wins over done
         lv_color_t text = solid ? paper : ink;
 
         if (solid) {
@@ -550,16 +550,17 @@ static void agent_update_cb(struct agent_state state) {
     }
 }
 
-// host/sofle-status sends Claude Code's state in the Compose and Kana indicator lights.
+// host/sofle-status sends Claude Code's flags in the Scroll Lock, Compose and Kana lights.
 static struct agent_state agent_get_state(const zmk_event_t *eh) {
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
     zmk_hid_indicators_t leds = zmk_hid_indicators_get_current_profile();
     return (struct agent_state){
-        .agent = ((leds & BIT(HID_USAGE_LED_COMPOSE - 1)) ? 1 : 0) |
-                 ((leds & BIT(HID_USAGE_LED_KANA - 1)) ? 2 : 0),
+        .agent = ((leds & BIT(HID_USAGE_LED_SCROLL_LOCK - 1)) ? AGENT_WORKING : 0) |
+                 ((leds & BIT(HID_USAGE_LED_COMPOSE - 1)) ? AGENT_NEEDS : 0) |
+                 ((leds & BIT(HID_USAGE_LED_KANA - 1)) ? AGENT_DONE : 0),
     };
 #else
-    return (struct agent_state){.agent = AGENT_IDLE};
+    return (struct agent_state){.agent = 0};
 #endif
 }
 
