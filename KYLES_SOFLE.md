@@ -13,6 +13,7 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
     chart (`widgets/status.c`).
 - **Joystick:** arrows on the base layer; scrolls (vertical and horizontal) on layers 1 and 2.
   Scroll speed is tunable live in [DYA Studio](https://studio.dya.cormoran.works/).
+- **Caps Lock key:** Esc on tap, Ctrl on hold. Pressing both Shifts turns on Caps Word.
 - **Knob:** volume on the base layer, scroll on layer 1.
 - **RGB:** layer 1 + X turns the underglow on in solid red.
 - **Layers** are named BASE / NAV / SYSTEM.
