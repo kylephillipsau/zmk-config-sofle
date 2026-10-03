@@ -1,3 +1,7 @@
+name: kyles-sofle
 build:
+  # Folder containing a "CMakeLists.txt" (. = root)
+  cmake: .
   settings:
-     board_root: .
+    # Folder containing a "boards" folder (. = root)
+    board_root: .
