@@ -248,8 +248,14 @@ static void draw_slots(const struct frame *f, const struct status_state *state) 
         } else if (state->profiles_bonded[i]) {
             dashed_square(f, x, y, 12, ink);
         }
-        draw_text(f, &lv_font_silkscreen_bold_8, x, 12, y + 3, LV_TEXT_ALIGN_CENTER,
-                  solid ? paper : ink, digit);
+        const struct glyph *icon = i < ARRAY_SIZE(slot_icons) ? slot_icons[i] : NULL;
+        if (icon != NULL) {
+            draw_glyph(f, x + (12 - icon->w) / 2, y + (12 - icon->h) / 2, icon,
+                       solid ? paper : ink);
+        } else {
+            draw_text(f, &lv_font_silkscreen_bold_8, x, 12, y + 3, LV_TEXT_ALIGN_CENTER,
+                      solid ? paper : ink, digit);
+        }
     }
 }
 

@@ -11,10 +11,15 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
     left half relays the active layer (`widgets/legend_layer.c`).
   - Left: both batteries, layer, Bluetooth slots, held modifiers and caps lock, plus a live WPM
     chart (`widgets/status.c`).
-- **Joystick:** arrows on the base layer; scrolls (vertical and horizontal) on layers 1 and 2.
-  Scroll speed is tunable live in [DYA Studio](https://studio.dya.cormoran.works/).
+- **Joystick:** arrows on the base layer; scrolls (vertical and horizontal) on layers 1 and 2,
+  reversed to suit macOS natural scrolling. Scroll speed is tunable live in
+  [DYA Studio](https://studio.dya.cormoran.works/).
 - **Caps Lock key:** Esc on tap, Ctrl on hold. Pressing both Shifts turns on Caps Word.
-- **Knob:** volume on the base layer, scroll on layer 1.
+- **Knob:** volume on the base layer, scroll on layer 1, Ctrl+Left/Right on layer 2 (switch
+  Spaces / full-screen apps on macOS).
+- **Bluetooth slots:** 1 Mac, 2 phone, 3 work computer, 4 Boox tablet, shown as icons on both
+  screens (`SLOT_ICONS` in `art/concepts.py`). Slots are assigned by pairing each device while
+  its slot is selected.
 - **RGB:** layer 1 + X turns the underglow on in solid red.
 - **Layers** are named BASE / NAV / SYSTEM.
 

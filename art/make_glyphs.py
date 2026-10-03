@@ -4,12 +4,13 @@ icons are the same pixels as the mockups.
     python3 make_glyphs.py
 """
 import os
-from concepts import CMD, OPT, CTRL, SHIFT, CAPSLOCK, BOLT_G
+from concepts import CMD, OPT, CTRL, SHIFT, CAPSLOCK, BOLT_G, SLOT_ICONS
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'boards', 'shields',
                    'nice_view_legend', 'widgets', 'status_glyphs.h')
 GLYPHS = [('glyph_cmd', CMD), ('glyph_opt', OPT), ('glyph_ctrl', CTRL), ('glyph_shift', SHIFT),
           ('glyph_caps', CAPSLOCK), ('glyph_bolt', BOLT_G)]
+SLOT_NAMES = ['glyph_slot_mac', 'glyph_slot_phone', 'glyph_slot_work', 'glyph_slot_boox', None]
 
 
 def main():
@@ -27,6 +28,21 @@ def main():
         out.append('};')
         out.append(f'static const struct glyph {name} = {{{w}, {h}, {name}_rows}};')
         out.append('')
+    for name, g in zip(SLOT_NAMES, SLOT_ICONS):
+        if g:
+            w, h = len(g[0]), len(g)
+            rows = [sum(1 << (w - 1 - x) for x, on in enumerate(r) if on) for r in g]
+            out.append(f'static const uint16_t {name}_rows[] = {{')
+            for r, bits in zip(g, rows):
+                out.append(f'    0x{bits:04x}, // {"".join("#" if b else "." for b in r)}')
+            out.append('};')
+            out.append(f'static const struct glyph {name} = {{{w}, {h}, {name}_rows}};')
+            out.append('')
+    out.append('// Icon per Bluetooth slot (NULL = show the slot number)')
+    out.append('static const struct glyph *const slot_icons[] = {')
+    out.append('    ' + ', '.join(f'&{n}' if n else 'NULL' for n in SLOT_NAMES) + ',')
+    out.append('};')
+    out.append('')
     with open(OUT, 'w') as f:
         f.write('\n'.join(out))
     print('wrote', os.path.relpath(OUT))

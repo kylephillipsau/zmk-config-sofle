@@ -331,7 +331,9 @@ def legend_layer2():
         x = 12 + i * 11
         d.rectangle([x, 37, x + 9, 47], outline=1)
         text(d, (x + 5, 40), str(i + 1), silk_b, 'c')
-    text(d, (None, 51), 'SLOTS ON 1-5', silk, 'c')
+    for i, icon in enumerate(SLOT_ICONS):
+        if icon:
+            blit(img, icon, 12 + i * 11 + (10 - len(icon[0])) // 2, 50)
     legend_rows(img, d, 62, [
         ('Q', 'BT CLEAR'),
         ('W', 'CLEAR ALL'),
@@ -409,30 +411,6 @@ def stats():
     blit(img, MOON, 2, 140)
     text(d, (12, 141), 'SLEEP 58M', silk)
     return img
-
-
-if __name__ == '__main__':
-    import os; os.makedirs('out', exist_ok=True)
-    out = {
-        'current': current_balloon(),
-        'nameplate': nameplate(),
-        'cheat': cheat_card(),
-        'legend_idle': legend_idle(),
-        'legend_l1': legend_layer1(),
-        'legend_l2': legend_layer2(),
-        'dash': dashboard(False),
-        'dash_caps': dashboard(True),
-        'stats': stats(),
-    }
-    for k, im in out.items():
-        im.save(f'out/mock_{k}.png')
-        preview(im, 4).save(f'out/mock_{k}@4x.png')
-    # contact sheet for review
-    sheet = Image.new('RGB', (len(out) * (W * 3 + 12), H * 3), (255, 255, 255))
-    for i, im in enumerate(out.values()):
-        sheet.paste(preview(im, 3), (i * (W * 3 + 12), 0))
-    sheet.save('out/sheet.png')
-    print('ok', list(out))
 
 
 # ------------------------------------------------------------ left (central) screen concepts
@@ -1120,7 +1098,11 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
                 for k in range(0, 12, 2):
                     d.point([(x + k, y), (x + k, y + 11), (x, y + k), (x + 11, y + k)], fill=1)
             on = i == active and i in connected
-            lv_text(img, 'silkscreen_bold_8', x, 12, y + 3, 'c', str(i + 1), fill=0 if on else 1)
+            icon = SLOT_ICONS[i]
+            if icon:
+                blit(img, icon, x + (12 - len(icon[0])) // 2, y + (12 - len(icon)) // 2, ink=0 if on else 1)
+            else:
+                lv_text(img, 'silkscreen_bold_8', x, 12, y + 3, 'c', str(i + 1), fill=0 if on else 1)
     mods = [('cmd', CMD), ('opt', OPT), ('ctrl', CTRL), ('shift', SHIFT), ('caps', CAPSLOCK)]
     for i, (name, g) in enumerate(mods):
         x = i * 14
@@ -1188,3 +1170,71 @@ def render_spec():
         sheet.paste(preview(im, 3), (i * (W * 3 + 12), 0))
     sheet.save('out/spec_sheet.png')
     return out
+
+
+# ------------------------------------------------------------- Bluetooth slot icons (slots 1-4)
+# Slot 1 Mac, 2 phone, 3 work computer, 4 Boox tablet; slot 5 keeps its number.
+
+ICON_LAPTOP = glyph([
+    ".#######.",
+    ".#.....#.",
+    ".#.....#.",
+    ".#.....#.",
+    ".#######.",
+    "#########",
+])
+ICON_PHONE = glyph([
+    "#####",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#...#",
+    "#.#.#",
+    "#####",
+])
+ICON_BRIEFCASE = glyph([
+    "..###..",
+    "..#.#..",
+    "#######",
+    "#.....#",
+    "###.###",
+    "#.....#",
+    "#######",
+])
+ICON_TABLET = glyph([
+    "#######",
+    "#.....#",
+    "#.###.#",
+    "#.....#",
+    "#.###.#",
+    "#.....#",
+    "#.##..#",
+    "#.....#",
+    "#######",
+])
+SLOT_ICONS = [ICON_LAPTOP, ICON_PHONE, ICON_BRIEFCASE, ICON_TABLET, None]
+
+
+if __name__ == '__main__':
+    import os; os.makedirs('out', exist_ok=True)
+    out = {
+        'current': current_balloon(),
+        'nameplate': nameplate(),
+        'cheat': cheat_card(),
+        'legend_idle': legend_idle(),
+        'legend_l1': legend_layer1(),
+        'legend_l2': legend_layer2(),
+        'dash': dashboard(False),
+        'dash_caps': dashboard(True),
+        'stats': stats(),
+    }
+    for k, im in out.items():
+        im.save(f'out/mock_{k}.png')
+        preview(im, 4).save(f'out/mock_{k}@4x.png')
+    # contact sheet for review
+    sheet = Image.new('RGB', (len(out) * (W * 3 + 12), H * 3), (255, 255, 255))
+    for i, im in enumerate(out.values()):
+        sheet.paste(preview(im, 3), (i * (W * 3 + 12), 0))
+    sheet.save('out/sheet.png')
+    print('ok', list(out))

@@ -79,3 +79,54 @@ static const uint16_t glyph_bolt_rows[] = {
     0x0018, // ##...
 };
 static const struct glyph glyph_bolt = {5, 6, glyph_bolt_rows};
+
+static const uint16_t glyph_slot_mac_rows[] = {
+    0x00fe, // .#######.
+    0x0082, // .#.....#.
+    0x0082, // .#.....#.
+    0x0082, // .#.....#.
+    0x00fe, // .#######.
+    0x01ff, // #########
+};
+static const struct glyph glyph_slot_mac = {9, 6, glyph_slot_mac_rows};
+
+static const uint16_t glyph_slot_phone_rows[] = {
+    0x001f, // #####
+    0x0011, // #...#
+    0x0011, // #...#
+    0x0011, // #...#
+    0x0011, // #...#
+    0x0011, // #...#
+    0x0015, // #.#.#
+    0x001f, // #####
+};
+static const struct glyph glyph_slot_phone = {5, 8, glyph_slot_phone_rows};
+
+static const uint16_t glyph_slot_work_rows[] = {
+    0x001c, // ..###..
+    0x0014, // ..#.#..
+    0x007f, // #######
+    0x0041, // #.....#
+    0x0077, // ###.###
+    0x0041, // #.....#
+    0x007f, // #######
+};
+static const struct glyph glyph_slot_work = {7, 7, glyph_slot_work_rows};
+
+static const uint16_t glyph_slot_boox_rows[] = {
+    0x007f, // #######
+    0x0041, // #.....#
+    0x005d, // #.###.#
+    0x0041, // #.....#
+    0x005d, // #.###.#
+    0x0041, // #.....#
+    0x0059, // #.##..#
+    0x0041, // #.....#
+    0x007f, // #######
+};
+static const struct glyph glyph_slot_boox = {7, 9, glyph_slot_boox_rows};
+
+// Icon per Bluetooth slot (NULL = show the slot number)
+static const struct glyph *const slot_icons[] = {
+    &glyph_slot_mac, &glyph_slot_phone, &glyph_slot_work, &glyph_slot_boox, NULL,
+};
