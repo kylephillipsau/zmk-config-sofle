@@ -4,3 +4,6 @@ modules/
 tools/
 .west/
 .omo
+firmware/
+art/out/
+__pycache__/
