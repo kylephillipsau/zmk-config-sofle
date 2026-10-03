@@ -1,0 +1,425 @@
+<title>Kyles Sofle Screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&family=Instrument+Sans:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a short intro, then a wrapping row of concept cards, each led by its pixel-exact screen renders. */
+  :root {
+    --bg: #eceef4;
+    --surface: #f7f8fb;
+    --fg: #15182e;
+    --muted: #5a6080;
+    --line: #cfd3e1;
+    --accent: #1e2252;          /* the panel's own navy */
+    --bezel: #101225;
+    --ok: #1f6b4a;  --ok-bg: #dcefe5;
+    --code: #8a4b00; --code-bg: #f6e7cf;
+    --display: "Jersey 10", "Silkscreen", ui-monospace, monospace;
+    --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --screen-w: 204px;          /* 3x the panel's 68px width */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0f1f; --surface: #15182c; --fg: #e8e6d8; --muted: #9a9fbd; --line: #2a2e4a;
+      --accent: #a9b0ff; --bezel: #05060d;
+      --ok: #8fd9b1; --ok-bg: #173327; --code: #f2c27a; --code-bg: #3a2a12;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f1f; --surface: #15182c; --fg: #e8e6d8; --muted: #9a9fbd; --line: #2a2e4a;
+    --accent: #a9b0ff; --bezel: #05060d;
+    --ok: #8fd9b1; --ok-bg: #173327; --code: #f2c27a; --code-bg: #3a2a12;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; }
+
+  header { display: grid; gap: 14px; max-width: 70ch; }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 400 clamp(44px, 7vw, 68px)/0.9 var(--display); margin: 0; color: var(--accent); text-wrap: balance; }
+  header p { margin: 0; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 12px/1.4 var(--mono); color: var(--muted); }
+  .facts b { color: var(--fg); font-weight: 500; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-block: 28px 18px;
+             padding-block: 12px; border-block: 1px solid var(--line); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-left: auto; }
+  .seg button { font: 500 12px var(--mono); padding: 6px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); letter-spacing: .04em;
+          padding: 5px 8px; border-radius: 4px; white-space: nowrap; }
+  .chip.ok { color: var(--ok); background: var(--ok-bg); }
+  .chip.code { color: var(--code); background: var(--code-bg); }
+  .chip.ref { color: var(--muted); background: transparent; border: 1px dashed var(--line); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 18px; }
+  .card { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--line);
+          border-radius: 10px; overflow: hidden; min-width: 0; }
+  .card.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .stage { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 14px;
+           padding: 22px 16px 16px; background:
+             radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--muted) 22%, transparent) 1px, transparent 1.5px) 0 0/10px 10px; }
+  figure { margin: 0; display: grid; justify-items: center; gap: 8px; }
+  .bezel { background: var(--bezel); padding: 9px 7px 13px; border-radius: 6px; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px rgba(10,12,30,.18); }
+  .bezel img { display: block; width: var(--screen-w); max-width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+  figcaption { font: 11px/1.2 var(--mono); color: var(--muted); letter-spacing: .03em; }
+
+  .body { display: grid; align-content: start; gap: 12px; padding: 16px 18px 20px; border-top: 1px solid var(--line); }
+  .title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+  h2 { font: 400 30px/1 var(--display); margin: 0; letter-spacing: .01em; }
+  .body p { margin: 0; color: var(--fg); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 13.5px; }
+  dt { font: 500 10.5px/1.9 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  dd { margin: 0; min-width: 0; }
+  kbd { font: 500 11.5px var(--mono); padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--bg); }
+  .pickline { font: 500 12px/1.4 var(--mono); color: var(--accent); }
+
+  section.side { display: grid; gap: 18px; margin-top: 34px; }
+  .side-head { display: grid; gap: 6px; max-width: 70ch; }
+  .side-title { font: 400 40px/1 var(--display); margin: 0; color: var(--accent); }
+  .side-head p { margin: 0; color: var(--muted); }
+  .side-head.sub { margin-top: 18px; }
+  .sub-title { font: 400 32px/1 var(--display); margin: 0; color: var(--fg); }
+  .chip.host { color: var(--accent); background: transparent; border: 1px solid var(--accent); }
+  code { font: 12px var(--mono); padding: 0 3px; border-radius: 3px; background: var(--bg); }
+  .anatomy { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; padding: 18px; background: var(--surface);
+             border: 1px solid var(--line); border-radius: 10px; }
+  .anatomy dl { flex: 1 1 280px; min-width: 0; }
+  section.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 28px; margin-top: 40px; }
+  section.notes h3 { font: 400 26px/1 var(--display); margin: 0 0 10px; color: var(--accent); }
+  section.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  section.notes p { margin: 0 0 8px; }
+  @media (prefers-reduced-motion: no-preference) { .bezel img { transition: width .2s ease; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Kyles Sofle · nice!view screens</span>
+    <h1>Screen ideas</h1>
+    <p>Each screen below is drawn pixel for pixel at the panel's real resolution, in the colours from your screen photo. Live numbers would use the same pixel digits, baked into the firmware. The panel is 1-bit, so there are no greys; the checkerboard textures are dithering.</p>
+    <div class="facts"><span><b>68 × 160</b> px portrait</span><span><b>≈ 11 × 25 mm</b> glass</span><span>5 px text ≈ <b>0.8 mm</b> tall</span><span>Redraws only when something changes</span></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="legend">
+      <span class="chip ok">ART ONLY</span>
+      <span class="chip code">CUSTOM CODE</span>
+    </div>
+    <div class="seg" role="group" aria-label="Preview size">
+      <button id="zoom3" type="button" aria-pressed="true">3× zoom</button>
+      <button id="zoomReal" type="button" aria-pressed="false">Roughly real size</button>
+    </div>
+  </div>
+
+
+  <section class="side" id="left">
+    <div class="side-head">
+      <h2 class="side-title">Left screen</h2>
+      <p>Status on top, always visible. Underneath is a module slot. Each module is built around minutes, not hours: the keyboard has no clock, but it can time things relative to when it woke up. You can keep one module, or switch between them with <kbd>L2</kbd>+<kbd>M</kbd>.</p>
+    </div>
+
+    <div class="anatomy">
+      <figure><div class="bezel"><img src="{left_v2_wpm}" alt="Left screen status area with live WPM module"></div><figcaption>status + live WPM</figcaption></figure>
+      <dl>
+        <dt>Top row</dt><dd>Both batteries as % and bars. The right half's level comes over the split link, which needs one setting turned on.</dd>
+        <dt>Bar</dt><dd>Current layer name (BASE / NAV / SYSTEM), so the left side matches the legend on the right</dd>
+        <dt>Slots</dt><dd>Bluetooth slots 1 to 5: filled = active, solid = connected, dashed = paired but away, plain = free</dd>
+        <dt>Badges</dt><dd><kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>⌃</kbd> <kbd>⇧</kbd> light up while held, which helps with layer-plus-modifier chords. The last badge is <b>caps lock</b>, since the board has no caps light.</dd>
+        <dt>Below</dt><dd>One of the modules</dd>
+      </dl>
+    </div>
+
+    <div class="grid">
+      <article class="card pick">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{left_v2_session}" alt="Session module: time 0:47, keys 3,214, accuracy 94%, peak 88 WPM, last 30 minutes chart"></div><figcaption>session</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Session</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>The stats idea, scaled to how you actually use the keyboard. A session starts when the keyboard wakes and resets after it sleeps.</p>
+          <dl>
+            <dt>Shows</dt><dd>Time typing, keys pressed, accuracy (share of keys that weren't backspace), peak WPM, and keys per minute over the last 30 minutes</dd>
+            <dt>Extra</dt><dd>A lifetime key count can be saved to the keyboard's storage every few minutes, so it survives power-off</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{left_v2_focus}" alt="Focus timer module: 18:42 remaining, round 2 of 4"></div><figcaption>focus timer</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Focus timer</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>A Pomodoro timer on the keyboard: 25 minutes of work, then a 5-minute break, counted down on screen. Start and pause it with <kbd>L2</kbd>+<kbd>T</kbd>, without touching the computer.</p>
+          <dl>
+            <dt>Shows</dt><dd>Time left, progress bar, which round you're on, what comes next</dd>
+            <dt>Note</dt><dd>The screen redraws once a second only while the timer runs</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{left_v2_echo}" alt="Last keys module: newest ⌘⇧4, then [, PG UP, ⌘C, TAB; holding NAV with ⌘ and ⇧ lit and caps lock on"></div><figcaption>last keys · NAV held</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Last keys</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>Echoes what the keyboard actually sent, newest at the top, modifiers included. It's a learning aid while you get used to the layers: it shows whether that chord came out as <kbd>⌘⇧4</kbd> or something else.</p>
+          <dl>
+            <dt>Shows</dt><dd>The last five keys or shortcuts</dd>
+            <dt>Privacy</dt><dd>It displays what you type, so I'd skip plain letters and show only shortcuts and special keys</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{left_stock}" alt="Current stock left screen: battery, gear, empty WPM box, BT circles 1–5, LAYER0"></div><figcaption>today</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>What you have now</h2><span class="chip ref">REFERENCE</span></div>
+          <p>Stock nice!view status: left battery only, an output icon, a typing-speed graph, five large slot circles and the layer name. Everything here carries over into the new status area, except the circles, which shrink into a single row.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="side-head sub">
+      <h3 class="sub-title">Just for fun</h3>
+      <p>Full-height modules for a terminal person. The status area shrinks to a one-line strip at the top (both batteries, layer, Bluetooth slot), so the module gets the rest of the screen. All of these run on the keyboard alone except the last one, which needs a small daemon on your machine.</p>
+    </div>
+
+    <div class="grid">
+      <article class="card pick">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_uptime}" alt="Terminal-style screen: uptime with 1, 5 and 15 minute load averages, acpi battery bars, who, fortune"></div><figcaption>$ uptime</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>$ uptime</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>The status screen as a shell session. The load averages are real: your typing rate, smoothed over 1, 5 and 15 minutes with the same exponential decay the Linux kernel uses for CPU load, where <b>1.00 = 60 WPM</b>.</p>
+          <dl>
+            <dt>Also</dt><dd><code>acpi</code> battery bars for both halves, <code>who</code> shows the Bluetooth slot, and <code>fortune</code> picks a new git, vim or shell one-liner each time the keyboard wakes</dd>
+            <dt>Power</dt><dd>Redraws every few seconds while you type, and stops when you stop</dd>
+          </dl>
+          <span class="pickline">Fun and genuinely useful: my pick.</span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_tux}" alt="Tux the penguin typing on a tiny keyboard, with fed, joy and xp meters"></div><figcaption>typing</figcaption></figure>
+          <figure><div class="bezel"><img src="{fun_tux_sleep}" alt="Tux asleep with zZ, idle 4 minutes"></div><figcaption>idle</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Tuxagotchi</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>A Tamagotchi-style Tux. Typing feeds him, fast typing makes him happy, and he naps when you stop. He levels up from your lifetime key count, which is saved to the keyboard's storage, so he grows over weeks.</p>
+          <dl>
+            <dt>Shows</dt><dd>Animated Tux (frames advance on key presses, so no idle animation drains the battery), fed / joy / xp meters</dd>
+            <dt>Effort</dt><dd>Medium. Most of it is drawing a handful of sprite frames.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_evtest}" alt="evtest-style inspector: KEY_LEFTBRACE 0x2F, usage, matrix position, layer, modifier bits, binding, event log"></div><figcaption>$ evtest · L1 held</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>$ evtest</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>An input inspector for your own keyboard, like running <code>evtest</code> against it. It shows exactly what the last key did: HID usage code, key position and matrix row/column, active layer, modifier byte in binary, the binding that fired, and an event log with timing.</p>
+          <dl>
+            <dt>Use</dt><dd>Handy when you start hacking on the keymap, or wonder why a chord didn't work</dd>
+            <dt>Privacy</dt><dd>It shows keys, so I'd make it a mode you switch on (L2+M), not the default</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_life}" alt="Conway's Game of Life, generation 1842, population 213"></div><figcaption>life</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Game of Life</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>Conway's Life on a 22 × 38 grid. Every key press advances one generation, and each key drops new cells at the spot matching its position on the board, so your typing keeps the colony alive.</p>
+          <dl>
+            <dt>Effort</dt><dd>Small. The simulation is about 30 lines of C.</dd>
+            <dt>Power</dt><dd>One redraw per key press, nothing while idle</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_snake}" alt="Snake game, score 12, high score 31"></div><figcaption>game layer</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Snake</h2><span class="chip code">CUSTOM CODE</span></div>
+          <p>An actual playable game. <kbd>L2</kbd>+<kbd>G</kbd> switches to a game layer, where the joystick steers instead of moving the mouse. The high score is saved.</p>
+          <dl>
+            <dt>Effort</dt><dd>The biggest of the on-keyboard ideas: a game layer, joystick input and a game loop of about 8 frames a second</dd>
+            <dt>Power</dt><dd>Only uses extra power while you're playing</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <figure><div class="bezel"><img src="{fun_hostlink}" alt="Host link: clock 14:32, last shell command failed with exit 1 after 12.4s, git main with changes, CI passed, 4 unread, CPU graph, memory bar"></div><figcaption>from your machine</figcaption></figure>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>Host link</h2><span class="chip host">NEEDS A DAEMON</span></div>
+          <p>A small daemon on your computer pushes data to the screen: the time, your <b>last shell command's exit status and duration</b> (from a zsh/bash prompt hook), the current git branch, CI status from <code>gh</code>, unread mail, CPU and memory.</p>
+          <dl>
+            <dt>How</dt><dd>The seller's ZMK fork lets firmware modules define their own messages for the Studio connection. A Python daemon on your machine sends updates over that link.</dd>
+            <dt>Catch</dt><dd>The biggest project here, and simplest over USB. Bluetooth is possible with more work. It's the only way to get a clock or anything else from the computer.</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="side" id="right">
+    <div class="side-head">
+      <h2 class="side-title">Right screen</h2>
+      <p>The layer legend is on your keyboard now. The other ideas are kept below for reference.</p>
+    </div>
+  <div class="grid">
+
+    <article class="card pick">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{legend_idle}" alt="Idle: KYLES SOFLE name, mini keyboard, BASE label"></div><figcaption>at rest</figcaption></figure>
+        <figure><div class="bezel"><img src="{legend_l1}" alt="Holding layer 1: arrow keys on IJKL and nav/F-key list"></div><figcaption>holding L1</figcaption></figure>
+        <figure><div class="bezel"><img src="{legend_l2}" alt="Holding layer 2: Bluetooth slots 1–5 and system keys"></div><figcaption>holding L2</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>Layer legend</h2><span class="chip ok">LIVE</span></div>
+        <p>Shows your name at rest. While you hold a layer key, it turns into a cheat sheet for that layer. It's personal most of the time and useful exactly when you need it.</p>
+        <dl>
+          <dt>Shows</dt><dd>Right battery, link to left half, then per-layer key maps for L1 (nav, F-keys, mouse, RGB) and L2 (BT slots, clear, USB/BLE, flash, soft off)</dd>
+          <dt>Needs</dt><dd>The left half sends its active layer to the right half. Your ZMK fork already has a relay feature for this.</dd>
+          <dt>Battery</dt><dd>About the same as now: it only redraws when the layer changes</dd>
+        </dl>
+        <span class="pickline">On your keyboard since 3 Oct.</span>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{dash}" alt="Dashboard: left 64%, right 91%, BT slot 2 WORK connected, caps off, LAYER0"></div><figcaption>caps off</figcaption></figure>
+        <figure><div class="bezel"><img src="{dash_caps}" alt="Dashboard with CAPS banner lit"></div><figcaption>caps on</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>Dashboard</h2><span class="chip code">CUSTOM CODE</span></div>
+        <p>Everything at a glance on one screen: both batteries as big numbers, which Bluetooth slot you're on with a name you choose, and a caps-lock banner. The board has no caps-lock light, so that banner is the most useful part.</p>
+        <dl>
+          <dt>Shows</dt><dd>L and R battery %, active slot plus your own label (e.g. <kbd>WORK</kbd>, <kbd>IPAD</kbd>), caps lock, layer</dd>
+          <dt>Needs</dt><dd>Caps lock is a one-line setting in stock ZMK. Left battery, slot and layer need the same relay as the legend.</dd>
+          <dt>Battery</dt><dd>About the same as now</dd>
+        </dl>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{nameplate}" alt="Nameplate: KYLES SOFLE, mini split keyboard, EST 2026"></div><figcaption>static</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>Nameplate</h2><span class="chip ok">ART ONLY</span></div>
+        <p>The direct replacement for the balloon: your keyboard's name, a little drawing of a Sofle with its staggered columns and knob, and a dithered footer. This is the quickest win, and the starting point for any of the others.</p>
+        <dl>
+          <dt>Shows</dt><dd>Right battery and link icon (unchanged), then the artwork</dd>
+          <dt>Needs</dt><dd>Swapping the image only</dd>
+          <dt>Battery</dt><dd>Same as now</dd>
+        </dl>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{cheat}" alt="Quick keys card listing soft off, wake, BT slots, BT clear, USB/BLE, flash, RGB, arrows"></div><figcaption>static</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>Quick keys</h2><span class="chip ok">ART ONLY</span></div>
+        <p>A permanent card for the shortcuts you use too rarely to remember: soft off is <kbd>Q</kbd>+<kbd>S</kbd>+<kbd>Z</kbd> held for 2 s, Bluetooth slots are on L2, flash mode is <kbd>L2</kbd>+<kbd>C</kbd>, and so on.</p>
+        <dl>
+          <dt>Shows</dt><dd>Eight shortcuts taken from your actual keymap</dd>
+          <dt>Needs</dt><dd>Swapping the image only. It goes stale if you remap keys in ZMK Studio.</dd>
+          <dt>Catch</dt><dd>It's dense: try "roughly real size" to judge the small text</dd>
+        </dl>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{stats}" alt="Stats: 12,408 keys typed, hourly bar chart, awake 3:12, top WPM 94, sleep in 58 minutes"></div><figcaption>live</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>Session stats</h2><span class="chip code">CUSTOM CODE</span></div>
+        <p>A typing tracker: keys typed this session, a 12-hour activity chart, time awake, top WPM, and a countdown to sleep.</p>
+        <dl>
+          <dt>Shows</dt><dd>Counters since the keyboard last powered on (it has no clock, so there's no "today")</dd>
+          <dt>Needs</dt><dd>The right half can count its own keys alone. A whole-board count and WPM need the relay.</dd>
+          <dt>Battery</dt><dd>Slightly more, because of frequent redraws. I'd throttle it to about every 30 s.</dd>
+        </dl>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="stage">
+        <figure><div class="bezel"><img src="{current}" alt="Current stock screen: hot-air balloon over mountains with nice!view logo"></div><figcaption>today</figcaption></figure>
+      </div>
+      <div class="body">
+        <div class="title-row"><h2>What you have now</h2><span class="chip ref">REFERENCE</span></div>
+        <p>Stock ZMK picks the balloon or the mountain at random on every boot. The battery and link icons along the top come with every option above unless that design replaces them.</p>
+      </div>
+    </article>
+
+  </div>
+  </section>
+
+  <section class="notes">
+    <div>
+      <h3>Not possible</h3>
+      <p>The keyboard only receives the caps, num and scroll lock lights from your computer. So none of these can be shown:</p>
+      <ul>
+        <li>a clock, the date or the weather</li>
+        <li>notifications, now-playing or CPU stats (only with a helper app on the computer, which is a much bigger project)</li>
+        <li>the computer's actual name (use your own slot labels instead)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Also possible on the left</h3>
+      <ul>
+        <li>A countdown to auto-sleep (1 hour idle)</li>
+        <li>Your own names for Bluetooth slots, e.g. <kbd>MAC</kbd> or <kbd>IPAD</kbd></li>
+        <li>An estimate of battery time left. The fork's battery-history module can track the drain rate, but it needs days of data to be meaningful.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Already done</h3>
+      <ul>
+        <li>The local Docker build works for both halves</li>
+        <li>The name is set to <kbd>Kyles Sofle</kbd> and confirmed inside the firmware</li>
+        <li>The right-screen layer legend is flashed and working</li>
+        <li>The joystick has a gentler acceleration curve, precision mode on L2, and live speed tuning in DYA Studio. The knob scrolls on L1.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+  const btn3 = document.getElementById('zoom3');
+  const btnReal = document.getElementById('zoomReal');
+  function setZoom(real) {
+    // 68 px across ~10.7 mm of glass; CSS mm is only approximate on most screens.
+    document.documentElement.style.setProperty('--screen-w', real ? '10.7mm' : '204px');
+    btn3.setAttribute('aria-pressed', String(!real));
+    btnReal.setAttribute('aria-pressed', String(real));
+  }
+  btn3.addEventListener('click', () => setZoom(false));
+  btnReal.addEventListener('click', () => setZoom(true));
+</script>

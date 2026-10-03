@@ -93,7 +93,7 @@
             >;
 
             sensor-bindings = <&rsr_vol &rsr_trans>;
-            display-name = "LAYER0";
+            display-name = "BASE";
         };
 
         layer_1 {
@@ -106,7 +106,7 @@
             >;
 
             sensor-bindings = <&rsr_vol &rsr_trans>;
-            display-name = "LAYER1";
+            display-name = "NAV";
         };
 
         layer_2 {
@@ -118,7 +118,7 @@
 &trans     &trans        &trans          &trans        &trans        &trans          &mkp LCLK        &trans  &trans  &trans      &trans     &trans
             >;
 
-            display-name = "LAYER2";
+            display-name = "SYSTEM";
             sensor-bindings = <&rsr_vol &rsr_trans>;
         };
 
