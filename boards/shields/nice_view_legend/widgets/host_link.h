@@ -19,6 +19,8 @@
  *                   when it sent the frame's first report
  *   type 2  usage   2 x (percent, minutes to reset (u16)), then 2 x 5-byte reset label
  *   type 3  repo    row, CI state, 12-byte name
+ *   type 4  event   start (s32 seconds), minutes before it to show, minutes after it to keep
+ *                   showing, 5-byte start label, 24-byte title (empty: no event coming up)
  *
  * Percent 0xff = unknown, minutes 0xffff = no reset time. Text is ASCII padded with NULs.
  */
@@ -40,12 +42,15 @@
 #define HOST_FRAME_CLOCK 1
 #define HOST_FRAME_USAGE 2
 #define HOST_FRAME_REPO 3
+#define HOST_FRAME_EVENT 4
 
 #define HOST_USAGE_ROWS 2 // 5 hour and weekly limits
 #define HOST_USAGE_LABEL 5
 #define HOST_REPO_ROWS 3
 #define HOST_REPO_NAME 12
-#define HOST_FRAME_MAX 18 // bytes in the longest frame, usage
+#define HOST_EVENT_LABEL 5
+#define HOST_EVENT_TITLE 24
+#define HOST_FRAME_MAX 37 // bytes in the longest frame, event
 
 #define HOST_PCT_UNKNOWN 0xff
 
@@ -67,11 +72,21 @@ struct host_repo {
     char name[HOST_REPO_NAME + 1];
 };
 
+struct host_event {
+    bool set;         // an event is coming up
+    int64_t start_ms; // uptime when it starts
+    int64_t from_ms;  // show it from here...
+    int64_t until_ms; // ...until here
+    char label[HOST_EVENT_LABEL + 1];
+    char title[HOST_EVENT_TITLE + 1];
+};
+
 struct host_card {
     bool has_usage;
     bool has_repos;
     struct host_usage usage[HOST_USAGE_ROWS];
     struct host_repo repos[HOST_REPO_ROWS];
+    struct host_event event;
 };
 
 struct host_link {

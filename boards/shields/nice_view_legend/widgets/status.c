@@ -202,26 +202,69 @@ static int floor_div(int a, int b) {
     return (a % b != 0 && ((a < 0) != (b < 0))) ? q - 1 : q;
 }
 
+// Whether the first len characters of s fit in w px.
+static bool text_fits(const lv_font_t *font, const char *s, size_t len, int w) {
+    if (len == 0) {
+        return true;
+    }
+    lv_font_glyph_dsc_t g;
+    int trailing = 0; // the last glyph's advance past its ink is spacing, not ink
+    if (lv_font_get_glyph_dsc(font, &g, (uint8_t)s[len - 1], 0)) {
+        trailing = g.adv_w - (g.ofs_x + g.box_w);
+    }
+    return lv_txt_get_width(s, len, font, 0, LV_TEXT_FLAG_EXPAND) - trailing <= w;
+}
+
 // Copy text into out, dropping characters from the end until it fits w px, then any '-', '_', '.'
 // or space left dangling. Mirrors lv_fit() in art/concepts.py.
 static void fit_text(const lv_font_t *font, const char *text, int w, char *out, size_t size) {
     snprintf(out, size, "%s", text);
     size_t len = strlen(out);
     bool cut = false;
-    while (len > 0) {
-        lv_font_glyph_dsc_t g;
-        int trailing = 0; // the last glyph's advance past its ink is spacing, not ink
-        if (lv_font_get_glyph_dsc(font, &g, (uint8_t)out[len - 1], 0)) {
-            trailing = g.adv_w - (g.ofs_x + g.box_w);
-        }
-        if (lv_txt_get_width(out, len, font, 0, LV_TEXT_FLAG_EXPAND) - trailing <= w) {
-            break;
-        }
+    while (!text_fits(font, out, len, w)) {
         out[--len] = '\0';
         cut = true;
     }
     while (cut && len > 0 && strchr("-_. ", out[len - 1])) {
         out[--len] = '\0';
+    }
+}
+
+// Word-wrap text into two lines of w px: whole words on the first line (a word too long for it is
+// cut there), the rest on the second, ending on a whole word if it has to be cut. Mirrors
+// lv_wrap() in art/concepts.py, which expects single spaces between words.
+static void wrap_text(const lv_font_t *font, const char *text, int w, char *line1, char *line2,
+                      size_t size) {
+    const char *rest;
+    size_t first = strcspn(text, " ");
+
+    line1[0] = line2[0] = '\0';
+    if (!text_fits(font, text, first, w)) {
+        char word[HOST_EVENT_TITLE + 1];
+        snprintf(word, MIN(sizeof(word), first + 1), "%s", text);
+        fit_text(font, word, w, line1, size);
+        rest = text + strlen(line1);
+    } else {
+        size_t len = first;
+        while (text[len] == ' ') {
+            size_t next = len + 1 + strcspn(text + len + 1, " ");
+            if (!text_fits(font, text, next, w)) {
+                break;
+            }
+            len = next;
+        }
+        snprintf(line1, MIN(size, len + 1), "%s", text);
+        rest = text + len + (text[len] == ' ' ? 1 : 0);
+    }
+
+    fit_text(font, rest, w, line2, size);
+    size_t n = strlen(line2);
+    char *space = strrchr(line2, ' ');
+    if (n < strlen(rest) && space != NULL && rest[n] != ' ') {
+        *space = '\0'; // end on a whole word rather than a fragment
+    }
+    for (n = strlen(line2); n > 0 && line2[n - 1] == ' '; n--) {
+        line2[n - 1] = '\0';
     }
 }
 
@@ -429,7 +472,35 @@ static void draw_usage_row(const struct frame *f, int y, const char *name,
     }
 }
 
-// The card under the clock: Claude's 5 hour and weekly limits, then CI for 3 recent repos.
+// The next event, over the repo rows: a bar with how soon it starts and when, then its title.
+static void draw_event(const struct frame *f, const struct host_event *e) {
+    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
+    char when[8], line1[HOST_EVENT_TITLE + 1], line2[HOST_EVENT_TITLE + 1];
+    int64_t until_start = e->start_ms - k_uptime_get();
+
+    if (until_start > 0) {
+        snprintf(when, sizeof(when), "IN %dM", (int)((until_start + 59999) / 60000));
+    } else {
+        snprintf(when, sizeof(when), "NOW");
+    }
+    fill(f, 0, 136, SCREEN_W, 10, ink);
+    draw_text(f, &lv_font_silkscreen_bold_8, 1, 40, 139, LV_TEXT_ALIGN_LEFT, paper, when);
+    draw_text(f, &lv_font_silkscreen_8, 40, SCREEN_W - 41, 139, LV_TEXT_ALIGN_RIGHT, paper,
+              e->label);
+    wrap_text(&lv_font_silkscreen_8, e->title, SCREEN_W - 2, line1, line2, sizeof(line1));
+    draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 148, LV_TEXT_ALIGN_LEFT, ink, line1);
+    if (line2[0] != '\0') {
+        draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 155, LV_TEXT_ALIGN_LEFT, ink, line2);
+    }
+}
+
+static bool event_showing(const struct host_event *e) {
+    int64_t now = k_uptime_get();
+    return e->set && now >= e->from_ms && now < e->until_ms;
+}
+
+// The card under the clock: Claude's 5 hour and weekly limits, then CI for 3 recent repos, or the
+// next event while it's close.
 static void draw_card(const struct frame *f, const struct status_state *state) {
     static const struct glyph *const ci_glyphs[] = {
         [HOST_CI_OK] = &glyph_ci_ok,
@@ -447,6 +518,10 @@ static void draw_card(const struct frame *f, const struct status_state *state) {
     }
 
     fill(f, 0, 135, SCREEN_W, 1, ink);
+    if (event_showing(&card->event)) {
+        draw_event(f, &card->event);
+        return;
+    }
     for (int i = 0; i < HOST_REPO_ROWS; i++) {
         const struct host_repo *repo = &card->repos[i];
         int y = REPOS_Y + i * 7;

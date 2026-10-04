@@ -15,6 +15,8 @@ static int frame_length(uint8_t type) {
         return 1 + HOST_USAGE_ROWS * 3 + HOST_USAGE_ROWS * HOST_USAGE_LABEL + 1;
     case HOST_FRAME_REPO:
         return 1 + 2 + HOST_REPO_NAME + 1;
+    case HOST_FRAME_EVENT:
+        return 1 + 6 + HOST_EVENT_LABEL + HOST_EVENT_TITLE + 1;
     default:
         return 0;
     }
@@ -74,6 +76,18 @@ static void apply_frame(struct host_link *link, const uint8_t *f) {
             copy_text(link->card.repos[row].name, f + 3, HOST_REPO_NAME);
             link->card.has_repos = true;
         }
+        break;
+    }
+    case HOST_FRAME_EVENT: {
+        struct host_event *e = &link->card.event;
+        int32_t start_s = (int32_t)((uint32_t)f[1] << 24 | (uint32_t)f[2] << 16 |
+                                    (uint32_t)f[3] << 8 | f[4]);
+        e->start_ms = link->frame_start_ms + (int64_t)start_s * 1000;
+        e->from_ms = e->start_ms - (int64_t)f[5] * 60000;
+        e->until_ms = e->start_ms + (int64_t)f[6] * 60000;
+        copy_text(e->label, f + 7, HOST_EVENT_LABEL);
+        copy_text(e->title, f + 7 + HOST_EVENT_LABEL, HOST_EVENT_TITLE);
+        e->set = e->title[0] != '\0';
         break;
     }
     }

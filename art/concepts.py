@@ -1493,3 +1493,42 @@ def spec_usage_ci(usage=((62, '2:40'), (31, 'TUE')), repos=(('TIMESPACE', 'ok'),
         blit(img, g, W - 1 - len(g[0]), y)
         y += 7
     return img
+
+
+# ------------------------------------------- next event, over the repo rows (v5 spec)
+
+def lv_wrap(font, s, w, lines=2):
+    """Greedy word wrap into at most `lines` lines of w px; the last line is trimmed to fit.
+    Mirrors wrap_text() in status.c."""
+    words, out = s.split(), []
+    while words and len(out) < lines - 1:
+        line = words.pop(0)
+        if lv_fit(font, line, w) != line:  # a word too long for a line: cut it there
+            cut = lv_fit(font, line, w)
+            out.append(cut)
+            words.insert(0, line[len(cut):])
+            continue
+        while words and lv_fit(font, line + ' ' + words[0], w) == line + ' ' + words[0]:
+            line += ' ' + words.pop(0)
+        out.append(line)
+    if words:
+        rest = ' '.join(words)
+        line = lv_fit(font, rest, w)
+        if line != rest and ' ' in line and rest[len(line)] != ' ':
+            line = line[:line.rindex(' ')]  # end on a whole word rather than a fragment
+        out.append(line.rstrip())
+    return out
+
+
+def spec_usage_event(event=('IN 12M', '10:30', 'WEEKLY PLANNING WITH DESIGN'), **kw):
+    """Mirrors draw_card() in status.c while an event is close: it takes the repo rows."""
+    img = spec_usage_ci(**kw)
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 136, W - 1, 159], fill=0)
+    when, start, title = event
+    d.rectangle([0, 136, W - 1, 145], fill=1)
+    lv_text(img, 'silkscreen_bold_8', 1, 40, 139, 'l', when, fill=0)
+    lv_text(img, 'silkscreen_8', 40, W - 41, 139, 'r', start, fill=0)
+    for i, line in enumerate(lv_wrap('silkscreen_8', title, W - 2)):
+        lv_text(img, 'silkscreen_8', 1, W - 2, 148 + i * 7, 'l', line)
+    return img

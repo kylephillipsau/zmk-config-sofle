@@ -43,6 +43,12 @@ static void print_link(const struct host_link *l) {
     for (int i = 0; i < HOST_REPO_ROWS && l->card.has_repos; i++) {
         printf("repo %d  %-12s %s\n", i, l->card.repos[i].name, ci[l->card.repos[i].ci]);
     }
+    const struct host_event *e = &l->card.event;
+    if (e->set) {
+        printf("event   \"%s\" at %s, starts at %lld s, shows %lld-%lld s\n", e->title, e->label,
+               (long long)e->start_ms / 1000, (long long)e->from_ms / 1000,
+               (long long)e->until_ms / 1000);
+    }
 }
 
 // Each part of a damaged decode must match the clean decode or still be empty.
@@ -59,6 +65,12 @@ static int same_or_empty(const struct host_link *got, const struct host_link *cl
             (g->reset_ms == 0) != (c->reset_ms == 0)) {
             return 0;
         }
+    }
+    const struct host_event *ge = &got->card.event, *ce = &clean->card.event;
+    if (ge->set && (strcmp(ge->title, ce->title) != 0 || strcmp(ge->label, ce->label) != 0 ||
+                    ge->until_ms - ge->start_ms != ce->until_ms - ce->start_ms ||
+                    ge->start_ms - ge->from_ms != ce->start_ms - ce->from_ms)) {
+        return 0;
     }
     for (int i = 0; i < HOST_REPO_ROWS; i++) {
         if (memcmp(&got->card.repos[i], &clean->card.repos[i], sizeof(got->card.repos[i])) != 0 &&
@@ -93,7 +105,7 @@ int main(int argc, char **argv) {
         decode(damaged, n - 1, &got);
         runs++;
         bad += !same_or_empty(&got, &clean);
-        lost += got.card.has_usage != clean.card.has_usage ||
+        lost += got.card.has_usage != clean.card.has_usage || got.card.event.set != clean.card.event.set ||
                 memcmp(got.card.repos, clean.card.repos, sizeof(got.card.repos)) != 0 ||
                 got.clock_base_s != clean.clock_base_s;
         // flip each bit of report i

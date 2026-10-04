@@ -17,8 +17,9 @@ plist="$HOME/Library/LaunchAgents/$label.plist"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$HOME/.local/bin" \
   "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 
-# Rebuild only when the source changed, so the signature (and the permission) stays put.
-source_hash="$(shasum -a 256 "$here/sofle-status.swift" | cut -d' ' -f1)"
+# Rebuild only when the source or this script changed, so the signature (and the permissions)
+# stay put.
+source_hash="$(cat "$here/sofle-status.swift" "$0" | shasum -a 256 | cut -d' ' -f1)"
 if [ -x "$exe" ] && [ "$(cat "$app/Contents/Resources/source.sha256" 2>/dev/null)" = "$source_hash" ]; then
   echo "$exe is up to date"
 else
@@ -33,6 +34,8 @@ else
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSUIElement</key><true/>
+    <key>NSCalendarsFullAccessUsageDescription</key><string>Shows your next meeting on the keyboard's screen.</string>
+    <key>NSCalendarsUsageDescription</key><string>Shows your next meeting on the keyboard's screen.</string>
 </dict>
 </plist>
 INFO

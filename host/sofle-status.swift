@@ -20,6 +20,8 @@
 //   usage   Claude Code's status line input (rate_limits), cached in usage.json
 //   repos   the 3 git repos where you most recently started a session or sent a prompt, with
 //           the latest GitHub Actions runs from `gh run list`, cached in ci.json
+//   event   the next event in the Mac's calendars, read by the launch agent (so the Calendars
+//           permission belongs to Sofle Status), cached in calendar.json
 //
 //   sofle-status hook                      read a Claude Code hook event on stdin (used by hooks)
 //   sofle-status statusline                read Claude Code's status line input (prints nothing)
@@ -37,6 +39,7 @@
 // Build: host/install.sh
 
 import CoreGraphics
+import EventKit
 import Foundation
 import IOKit.hid
 
@@ -77,6 +80,7 @@ let pushLockFile = stateDir.appendingPathComponent("push.lock")
 let pushPendingFile = stateDir.appendingPathComponent("push-pending")
 let usageFile = stateDir.appendingPathComponent("usage.json")
 let ciFile = stateDir.appendingPathComponent("ci.json")
+let calendarFile = stateDir.appendingPathComponent("calendar.json")
 let sentFile = stateDir.appendingPathComponent("sent.json")
 let logFile = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/sofle-status.log")
 
@@ -263,8 +267,13 @@ func currentFlags() -> UInt8 {
 let frameClock: UInt8 = 1
 let frameUsage: UInt8 = 2
 let frameRepo: UInt8 = 3
+let frameEvent: UInt8 = 4
 let usageLabelLength = 5
 let repoNameLength = 12
+let eventLabelLength = 5
+let eventTitleLength = 24
+let eventLead = 30            // minutes before an event starts that it takes over the repo rows
+let eventShowAfterStart = 15  // minutes after it starts that it keeps them, at most
 
 func crc8(_ bytes: [UInt8]) -> UInt8 {
     var crc: UInt8 = 0
@@ -508,6 +517,84 @@ func repoCards(_ rows: [[String: Any]]) -> [Card] {
     }
 }
 
+// MARK: Calendar
+
+enum EventStore {
+    static let shared = EKEventStore()  // only the launch agent creates it
+}
+
+// Ask once, from the launch agent, so the permission is Sofle Status's.
+func requestCalendarAccess() {
+    guard EKEventStore.authorizationStatus(for: .event) == .notDetermined else { return }
+    EventStore.shared.requestFullAccessToEvents { granted, _ in
+        log(granted ? "calendar access granted"
+            : "no calendar access: allow Sofle Status in System Settings > Privacy & Security > Calendars")
+        if granted { DispatchQueue.main.async { refreshCalendar(); push() } }
+    }
+}
+
+// Cache the event to show next: the earliest timed event that hasn't finished and started less
+// than eventShowAfterStart minutes ago, skipping cancelled ones and ones you declined.
+func refreshCalendar() {
+    guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
+        try? fm.removeItem(at: calendarFile)
+        return
+    }
+    let now = Date()
+    let showAfter = TimeInterval(eventShowAfterStart * 60)
+    let store = EventStore.shared
+    let range = store.predicateForEvents(withStart: now.addingTimeInterval(-showAfter),
+                                         end: now.addingTimeInterval(24 * 3600), calendars: nil)
+    let next = store.events(matching: range).filter { event in
+        !event.isAllDay && event.status != .canceled && event.endDate > now
+            && event.startDate.addingTimeInterval(showAfter) > now
+            && event.attendees?.first(where: \.isCurrentUser)?.participantStatus != .declined
+    }.min { $0.startDate < $1.startDate }
+    let entry: [String: Any] = next.map {
+        ["title": $0.title ?? "", "start": $0.startDate.timeIntervalSince1970, "end": $0.endDate.timeIntervalSince1970]
+    } ?? [:]
+    // an empty file means no event coming up; no file means no calendar access
+    if !fm.fileExists(atPath: calendarFile.path)
+        || NSDictionary(dictionary: readJSON(calendarFile)) != NSDictionary(dictionary: entry) {
+        writeJSON(entry, to: calendarFile)
+    }
+}
+
+// Uppercase ASCII with single spaces, at most eventTitleLength characters, cut at a word if it can.
+func eventTitle(_ title: String) -> String {
+    let folded = title.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil).uppercased()
+    let ascii = String(folded.unicodeScalars.compactMap { scalar -> Character? in
+        if CharacterSet.whitespacesAndNewlines.contains(scalar) { return " " }
+        return scalar.value > 0x20 && scalar.value < 0x7f ? Character(scalar) : nil
+    })
+    let words = ascii.split(separator: " ").joined(separator: " ")
+    guard words.count > eventTitleLength else { return words }
+    let cut = words.prefix(eventTitleLength)
+    if words[cut.endIndex] != " ", let space = cut.lastIndex(of: " ") { return String(cut[..<space]) }
+    return String(cut)
+}
+
+func eventCard() -> Card {
+    let entry = readJSON(calendarFile)
+    let title = eventTitle(entry["title"] as? String ?? "")
+    guard let startTime = entry["start"] as? Double, let endTime = entry["end"] as? Double,
+          !title.isEmpty, endTime > Date().timeIntervalSince1970 else {
+        return Card(key: "event", content: "none") {
+            [frameEvent] + [UInt8](repeating: 0, count: 6 + eventLabelLength + eventTitleLength)
+        }
+    }
+    let start = Date(timeIntervalSince1970: startTime)
+    let label = timeLabel(start)
+    let showAfter = min(eventShowAfterStart, max(1, Int((endTime - startTime) / 60)))
+    return Card(key: "event", content: "\(title) \(Int(startTime)) \(showAfter) \(label)") {
+        // seconds until it starts, counted from when the frame's first report arrives
+        let seconds = UInt32(bitPattern: Int32(clamping: Int((start.timeIntervalSinceNow - firstReportLead).rounded())))
+        return [frameEvent, UInt8(seconds >> 24), UInt8(seconds >> 16 & 0xff), UInt8(seconds >> 8 & 0xff),
+                UInt8(seconds & 0xff), UInt8(eventLead), UInt8(showAfter)]
+            + text(label, eventLabelLength) + text(title, eventTitleLength)
+    }
+}
+
 // MARK: Push
 
 // Send the cards that changed, or all of them if forced or the keyboard reconnected. A clock frame
@@ -520,7 +607,7 @@ func pushOnce(force: Bool, clock: Bool = false) {
     let reconnected = sent["connection"] as? String != connection
     let now = Date().timeIntervalSince1970
     let clockDue = clock || reconnected || now - (sent["clock"] as? Double ?? 0) > clockResendAfter
-    let due = ([usageCard()] + repoCards(rows)).filter { card in
+    let due = ([usageCard()] + repoCards(rows) + [eventCard()]).filter { card in
         let last = sent[card.key] as? [String: Any]
         return force || reconnected || last?["content"] as? String != card.content
             || now - (last?["at"] as? Double ?? 0) > cardsResendAfter
@@ -618,6 +705,7 @@ func runDaemon() -> Never {
         guard isKeyboard(device) else { return }
         let transport = prop(device, kIOHIDTransportKey)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            refreshCalendar()
             push(force: true, clock: true)
             log("keyboard connected via \(transport)")
         }
@@ -637,9 +725,16 @@ func runDaemon() -> Never {
     var ticks = 0
     Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
         ticks += 1
+        refreshCalendar()
         push(clock: ticks % 5 == 0)
     }
+    NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: EventStore.shared, queue: .main) { _ in
+        refreshCalendar()
+        push()
+    }
     log("sofle-status daemon started")
+    requestCalendarAccess()
+    refreshCalendar()
     // Opening a keyboard needs Input Monitoring. Terminals usually have it; a launch agent doesn't.
     // Asking adds Sofle Status to System Settings > Privacy & Security > Input Monitoring.
     if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
@@ -664,6 +759,14 @@ func describeCards(_ rows: [[String: Any]]) {
         print("\(row["name"] as? String ?? "?")  \(states[min(row["ci"] as? Int ?? 0, 3)])  (\(row["root"] as? String ?? ""))")
     }
     if rows.isEmpty { print("no repos yet: they appear after a Claude Code session starts or gets a prompt in one") }
+    let event = readJSON(calendarFile)
+    if let start = event["start"] as? Double {
+        let date = Date(timeIntervalSince1970: start)
+        print("next event: \(eventTitle(event["title"] as? String ?? "")) at \(timeLabel(date)), shows from \(timeLabel(date.addingTimeInterval(-Double(eventLead * 60))))")
+    } else {
+        print(fm.fileExists(atPath: calendarFile.path) ? "next event: none in the next 24 hours"
+              : "next event: no calendar access yet (the launch agent asks for it)")
+    }
 }
 
 // Earlier versions kept a single cache file at this path; it's a folder now.
@@ -687,7 +790,7 @@ case "cards":
     describeCards(repoRows(poll: true))
     push(force: true)
 case "encode":
-    let frames = [clockFrame, usageCard().frame] + repoCards(repoRows(poll: false)).map(\.frame)
+    let frames = [clockFrame, usageCard().frame] + repoCards(repoRows(poll: false)).map(\.frame) + [eventCard().frame]
     for bits in frameSteps(frames).flatMap({ $0() }) { print(String(format: "%02x", bits)) }
 case "time":
     var flags: UInt8 = 0
