@@ -4,6 +4,10 @@
  * Decoder for what host/sofle-status sends in keyboard indicator lights macOS doesn't use. Plain C
  * with no ZMK or Zephyr includes, so host/test_host_link.c can run it on the Mac.
  *
+ * Windows won't let an app set a keyboard's lights, so host/windows sends the same reports, one
+ * byte each, through a raw HID interface instead, up to 32 in each HID report. A repeated report
+ * changes nothing, so a short HID report is padded with copies of its last byte.
+ *
  * Every LED output report is one byte, bit n = HID LED usage n + 1:
  *
  *   Num Lock off   resting report: Scroll Lock and Compose are Claude Code's flags.

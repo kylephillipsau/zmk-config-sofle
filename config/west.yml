@@ -4,6 +4,8 @@ manifest:
       url-base: https://github.com/zmkfirmware
     - name: cormoran
       url-base: https://github.com/cormoran
+    - name: zzeneg
+      url-base: https://github.com/zzeneg
   projects:
     - name: zmk
       remote: cormoran
@@ -24,5 +26,10 @@ manifest:
     - name: zmk-module-runtime-input-processor
       remote: cormoran
       revision: zmk-v0.3.0.0
+    # A vendor-defined HID interface, for Windows: it won't let an app set a keyboard's lights
+    # (host/windows)
+    - name: zmk-raw-hid
+      remote: zzeneg
+      revision: 6a37765dfab6197292e7a9f47305dcf87386d56a
   self:
     path: config

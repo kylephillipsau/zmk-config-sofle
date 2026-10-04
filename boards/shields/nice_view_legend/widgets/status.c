@@ -49,6 +49,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/hid_indicators.h>
 #include <zmk/events/hid_indicators_changed.h>
 #endif
+#if IS_ENABLED(CONFIG_RAW_HID)
+#include <raw_hid/events.h>
+#endif
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
 #include <zmk/split/central.h>
 #endif
@@ -746,8 +749,19 @@ static void host_update_cb(struct host_state state) {
     }
 }
 
+static void host_feed(struct host_link *link, uint8_t leds) {
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+    if (leds & HOST_LED_NUM) {
+        host_link_ble_frame_report();
+    }
+#endif
+    host_link_feed(link, leds, k_uptime_get());
+}
+
 // host/sofle-status sends Claude Code's flags, the time and the card in indicator lights macOS
-// doesn't use (see host_link.h). Caps Lock is masked out, so it never disturbs them.
+// doesn't use (see host_link.h). Caps Lock is masked out, so it never disturbs them. Windows won't
+// let an app set a keyboard's lights, so host/windows sends the same reports through the raw HID
+// interface instead, up to 32 in each HID report.
 static struct host_state host_get_state(const zmk_event_t *eh) {
     static struct host_link link;
     static bool initialized;
@@ -757,14 +771,19 @@ static struct host_state host_get_state(const zmk_event_t *eh) {
         host_link_init(&link);
         initialized = true;
     }
-#if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    zmk_hid_indicators_t leds = zmk_hid_indicators_get_current_profile();
-#if IS_ENABLED(CONFIG_ZMK_BLE)
-    if (leds & HOST_LED_NUM) {
-        host_link_ble_frame_report();
+#if IS_ENABLED(CONFIG_RAW_HID)
+    // eh is NULL when the widget starts
+    const struct raw_hid_received_event *raw = eh != NULL ? as_raw_hid_received_event(eh) : NULL;
+    for (int i = 0; raw != NULL && i < raw->length; i++) {
+        host_feed(&link, raw->data[i]);
     }
+#else
+    const void *raw = NULL;
 #endif
-    host_link_feed(&link, leds, k_uptime_get());
+#if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+    if (raw == NULL) {
+        host_feed(&link, zmk_hid_indicators_get_current_profile());
+    }
 #endif
     if (link.last_frame_ms != seen_frame_ms) {
         seen_frame_ms = link.last_frame_ms;
@@ -781,6 +800,9 @@ static struct host_state host_get_state(const zmk_event_t *eh) {
 ZMK_DISPLAY_WIDGET_LISTENER(widget_host, struct host_state, host_update_cb, host_get_state)
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
 ZMK_SUBSCRIPTION(widget_host, zmk_hid_indicators_changed);
+#endif
+#if IS_ENABLED(CONFIG_RAW_HID)
+ZMK_SUBSCRIPTION(widget_host, raw_hid_received_event);
 #endif
 
 static void wpm_status_update_cb(struct wpm_status_state state) {

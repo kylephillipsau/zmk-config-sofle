@@ -43,6 +43,9 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   The card shows only while the Mac is feeding it: a frame arrived in the last 15 minutes (the
   Mac resends every 10), over the connection the keyboard is using now. On another Bluetooth slot,
   or once the Mac sleeps, the WPM chart takes its place.
+- **Windows** feeds the same screen through a vendor-defined HID interface on the left half
+  ([zmk-raw-hid](https://github.com/zzeneg/zmk-raw-hid)), since it won't let an app set a
+  keyboard's lights. See [Windows](#windows).
 
 ## Building
 
@@ -138,6 +141,50 @@ cc -I boards/shields/nice_view_legend/widgets -o /tmp/test_host_link host/test_h
    boards/shields/nice_view_legend/widgets/host_link.c
 sofle-status encode | /tmp/test_host_link --damage
 ```
+
+### Windows
+
+`host/windows` is the same tool for Windows, in Rust: `sofle-status.exe` for the hooks, the status
+line and the commands above, and `sofle-status-agent.exe` in place of the launch agent. It sends the
+same reports, but not in the keyboard's lights. Windows keeps keyboards for itself and refuses an
+app's output reports to them: over Bluetooth, `HidD_SetOutputReport` and `WriteFile` both fail with
+"Incorrect function". So the left half also has a vendor-defined HID interface,
+[zmk-raw-hid](https://github.com/zzeneg/zmk-raw-hid) (usage page 0xFF60), which any app may write
+to, and `widgets/status.c` feeds each byte of its reports to the same decoder. Up to 32 reports
+travel in one HID report, so a whole card takes 14 writes instead of about 450. A short HID report
+is padded with copies of its last byte, which the decoder ignores as repeats. Every push starts
+with the flags: Windows sends the keyboard its own lights whenever they change, and with Num Lock
+on, the keyboard takes that for the start of a frame.
+
+How it differs from the Mac:
+
+- There's no calendar yet, so the card shows the repos (the agent only reads `calendar.json`).
+- Hooks and the status line ask the agent to push instead of starting a push themselves, so cards
+  go out only while the agent runs. A hook still sends the flags itself.
+- The agent looks for the keyboard every 2 seconds. A Bluetooth keyboard's devices can stay while
+  it's asleep or on another slot, so it checks the Bluetooth device's connection state too, and
+  takes a new last-connected time for a reconnection.
+- State and the agent's log are in `%LOCALAPPDATA%\sofle-status`.
+- CI needs `gh`: `winget install GitHub.cli`, then `gh auth login`.
+
+Install with `host\windows\install.ps1` (needs Rust). It builds both programs into `~/.local/bin`,
+starts the agent, and adds it to the programs Windows starts at sign-in. Then add the hooks and
+status line to `~/.claude/settings.json`. The hooks run the program without a shell:
+
+```json
+"hooks": {
+  "SessionStart": [{ "hooks": [{ "type": "command", "command": "C:/Users/<you>/.local/bin/sofle-status.exe", "args": ["hook"], "async": true }] }],
+  ...the same for SessionEnd, UserPromptSubmit, PostToolUse, PermissionRequest, Notification, Stop and StopFailure
+},
+"statusLine": { "type": "command", "command": "~/.local/bin/sofle-status.exe statusline" }
+```
+
+`sofle-status list` shows whether Windows sees the raw HID interface. The left half needs firmware
+with it, and the new interface changes the keyboard's Bluetooth services, so a computer that paired
+with it before may need to pair again.
+
+`cargo test` in `host/windows` builds `host/test_host_link.c` with MSVC and runs the decoder, with
+`--damage`, on the HID reports `sofle-status encode --raw` prints.
 
 ## Tetris
 

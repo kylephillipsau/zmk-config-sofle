@@ -91,6 +91,11 @@ Over Bluetooth, ZMK lets the keyboard skip up to 30 radio intervals while idle, 
 about 360 ms. While frames arrive, the left half asks the Mac for latency 0, then restores it, so a
 card arrives in a few seconds without raising idle power use.
 
+A Windows PC can feed the same screen with `host/windows`, a Rust port of the tool. Windows won't
+let an app set a keyboard's lights, so it sends the same reports, up to 32 at a time, through a
+second, vendor-defined HID interface that the left half also has. The calendar isn't on Windows
+yet.
+
 [KYLES_SOFLE.md](KYLES_SOFLE.md) documents the frame format and the data sources.
 
 ## Keymap
@@ -109,6 +114,7 @@ card arrives in a few seconds without raising idle power use.
 ./flash.sh left       # then double-press the left half's reset button
 ./flash.sh right
 host/install.sh       # the Mac side: Sofle Status.app and its launch agent
+host\windows\install.ps1   # the Windows side: sofle-status.exe and its agent
 ```
 
 Both halves mount as `NICENANO` in flashing mode. `flash.sh` tells them apart by USB serial number
@@ -121,6 +127,7 @@ and won't flash the wrong half.
 | `config/` | the keymap and keyboard settings |
 | `boards/shields/nice_view_legend/` | both screens: `widgets/status.c` (left), `widgets/peripheral_status.c` and `widgets/tetris.c` (right), the decoder for the Mac's frames in `widgets/host_link.c` |
 | `host/` | `sofle-status`, the Mac side, and tests that run the firmware's decoder and Tetris rules on the Mac |
+| `host/windows/` | `sofle-status` for Windows, in Rust, with a test that runs the firmware's decoder on what it sends |
 | `art/` | the screen designs, and the scripts that turn them into firmware art, fonts and these images |
 | `docs/` | these images and the [seller's notes](docs/seller-notes.md) |
 

@@ -1,0 +1,27 @@
+[package]
+name = "sofle-status"
+version = "0.1.0"
+edition = "2024"
+description = "Feeds the Kyles Sofle's left screen from Windows: Claude Code's status, the time, usage limits and CI"
+publish = false
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde_json = "1"
+unicode-normalization = "0.1"
+windows-sys = { version = "0.61", features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Devices_Properties",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+cc = "1"
+
+[profile.release]
+lto = true
+strip = true

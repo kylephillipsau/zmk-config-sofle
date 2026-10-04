@@ -46,7 +46,7 @@ build() {
   "
 }
 
-left()  { build left  "eyelash_sofle_left $DISPLAY_SHIELD" \
+left()  { build left  "eyelash_sofle_left $DISPLAY_SHIELD raw_hid_adapter" \
             "-S studio-rpc-usb-uart" "-DCONFIG_ZMK_STUDIO=y -DCONFIG_ZMK_STUDIO_LOCKING=n"; }
 right() { build right "eyelash_sofle_right $DISPLAY_SHIELD"; }
 reset() { build reset "settings_reset"; }
