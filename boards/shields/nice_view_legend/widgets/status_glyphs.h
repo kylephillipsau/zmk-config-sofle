@@ -6,14 +6,7 @@
 
 #pragma once
 
-#include <stdint.h>
-
-// Row bitmaps, most significant used bit = leftmost pixel.
-struct glyph {
-    uint8_t w;
-    uint8_t h;
-    const uint16_t *rows;
-};
+#include "draw.h" // struct glyph
 
 static const uint16_t glyph_cmd_rows[] = {
     0x00c6, // .##...##.

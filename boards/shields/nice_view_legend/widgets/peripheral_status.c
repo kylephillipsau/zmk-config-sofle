@@ -22,6 +22,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include "peripheral_status.h"
 #include "legend_layer.h"
+#include "tetris.h"
 
 LV_IMG_DECLARE(legend_base);
 LV_IMG_DECLARE(legend_l1);
@@ -50,6 +51,7 @@ static const lv_img_dsc_t *legend_for_layer(uint8_t layer) {
 
 static void set_legend(struct zmk_widget_status *widget, uint8_t layer) {
     lv_obj_t *art = lv_obj_get_child(widget->obj, 1);
+    tetris_set_active(layer == TETRIS_LAYER); // the game replaces the legend on the GAME layer
     const lv_img_dsc_t *src = legend_for_layer(layer);
     if (lv_img_get_src(art) != src) {
         lv_img_set_src(art, src);
@@ -166,6 +168,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_obj_t *art = lv_img_create(widget->obj);
     lv_img_set_src(art, &legend_base);
     lv_obj_align(art, LV_ALIGN_TOP_LEFT, 0, 0);
+    tetris_create(widget->obj, art);
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();

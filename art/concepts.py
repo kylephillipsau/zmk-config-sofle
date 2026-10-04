@@ -346,8 +346,8 @@ def legend_layer2():
     legend_rows(img, d, 62, [
         ('Q', 'BT CLEAR'),
         ('W', 'CLEAR ALL'),
-        ('A', 'USB OUT'),
-        ('S', 'BLE OUT'),
+        ('A S', 'USB  BLE'),
+        ('T', 'TETRIS'),
         ('C /', 'FLASH'),
         ('Z ,', 'RESTART'),
         ('.', 'SOFT OFF'),
@@ -1558,14 +1558,14 @@ def tetris_block(d, x, y, style):
         d.point([(x, y), (x + 4, y), (x, y + 4), (x + 4, y + 4), (x + 2, y + 2)], fill=1)
 
 
-def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240, level=3, lines=12,
+def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240, level=3,
                 style='hollow', piece_style='solid'):
     """The right screen during a game. Mirrors widgets/tetris.c."""
     img, d = new()
     status_bar(img, d)
-    # header: score, level and lines; the next piece on the right
+    # header: score (up to 999999) and level; the next piece on the right
     lv_text(img, 'silkscreen_bold_8', 1, 44, 23, 'l', str(score))
-    lv_text(img, 'silkscreen_8', 1, 44, 31, 'l', f'LV{level} L{lines}')
+    lv_text(img, 'silkscreen_8', 1, 44, 31, 'l', f'LEVEL {level}')
     for cx, cy in TETROMINOES[nxt]:
         d.rectangle([48 + cx * 4, 24 + cy * 4, 48 + cx * 4 + 2, 24 + cy * 4 + 2], fill=1)
     # well
@@ -1582,6 +1582,8 @@ def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240
         for c, ch in enumerate(row):
             if ch == '#':
                 tetris_block(d, *cell_xy(c, r), style)
+    if piece is None:  # game over: the piece that didn't fit isn't drawn
+        return img
     name, px, py = piece
     if ghost_y is None:  # where the piece would land
         def free(y):
@@ -1601,21 +1603,22 @@ def spec_tetris_title(best=4820):
     img, d = new()
     status_bar(img, d)
     d.rectangle([WELL_X, WELL_Y, WELL_X + 10 * CELL + 1, WELL_Y + 20 * CELL + 1], outline=1)
-    lv_text(img, 'jersey_1x', 0, W, 58, 'c', 'TETRIS')
+    lv_text(img, 'jersey_1x', 0, W, 54, 'c', 'TETRIS')
     for c, r, name in ((1, 0, 'T'), (5, 1, 'S'), (2, 2, 'L')):  # a little stack under the title
         for cx, cy in TETROMINOES[name]:
-            tetris_block(d, 22 + (c + cx) * CELL - 12, 78 + (r + cy) * CELL, 'hollow')
-    lv_text(img, 'silkscreen_8', 0, W, 112, 'c', 'BEST')
-    lv_text(img, 'silkscreen_bold_8', 0, W, 121, 'c', str(best))
-    lv_text(img, 'silkscreen_8', 0, W, 140, 'c', 'PRESS THE')
-    lv_text(img, 'silkscreen_8', 0, W, 148, 'c', 'STICK')
+            tetris_block(d, 10 + (c + cx) * CELL, 72 + (r + cy) * CELL, 'hollow')
+    lv_text(img, 'silkscreen_8', 0, W, 100, 'c', 'BEST')
+    lv_text(img, 'silkscreen_bold_8', 0, W, 109, 'c', str(best))
+    lv_text(img, 'silkscreen_8', 0, W, 126, 'c', 'PRESS THE')
+    lv_text(img, 'silkscreen_8', 0, W, 134, 'c', 'STICK')
+    lv_text(img, 'silkscreen_8', 0, W, 147, 'c', 'ESC TO QUIT')
     return img
 
 
 def spec_tetris_over(score=1240, best=4820, new_best=False):
     """Game over: a box over the stack with the score and how to play again."""
     img = spec_tetris(board=['..........'] * 4 + ['....#.....', '...###....'] + ['#.##.####.', '####.#####'] * 7,
-                      piece=('O', 3, 0), ghost_y=0, style='hollow')
+                      piece=None, style='hollow')
     d = ImageDraw.Draw(img)
     d.rectangle([0, 66, W - 1, 125], fill=0, outline=1)
     d.rectangle([0, 66, W - 1, 77], fill=1)
