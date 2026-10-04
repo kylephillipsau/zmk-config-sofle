@@ -6,7 +6,7 @@
  *
  * Every LED output report is one byte, bit n = HID LED usage n + 1:
  *
- *   Num Lock off   resting report: Scroll Lock, Compose and Kana are Claude Code's flags.
+ *   Num Lock off   resting report: Scroll Lock and Compose are Claude Code's flags.
  *                  It also ends a frame.
  *   Num Lock on    one frame report: Scroll Lock and Compose carry 2 bits, most significant
  *                  first, and Kana alternates 0, 1, 0, ... so every report differs from the last.
@@ -36,7 +36,6 @@
 // Claude Code flags, summed over every session by the host
 #define AGENT_WORKING (1 << 0) // some session is working
 #define AGENT_NEEDS (1 << 1)   // some session needs you
-#define AGENT_DONE (1 << 2)    // a session finished since your last prompt
 
 #define HOST_FRAME_CLOCK 1
 #define HOST_FRAME_USAGE 2

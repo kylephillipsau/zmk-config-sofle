@@ -30,8 +30,8 @@ static void print_link(const struct host_link *l) {
         printf("clock   %02d:%02d:%02d  synced at %lld ms\n", l->clock_base_s / 3600,
                l->clock_base_s / 60 % 60, l->clock_base_s % 60, (long long)l->clock_sync_ms);
     }
-    printf("flags   %s%s%s\n", l->agent & AGENT_WORKING ? "working " : "",
-           l->agent & AGENT_NEEDS ? "needs " : "", l->agent & AGENT_DONE ? "done" : "");
+    printf("flags   %s%s\n", l->agent & AGENT_WORKING ? "working " : "",
+           l->agent & AGENT_NEEDS ? "needs" : "");
     const char *names[] = {"5H", "WK"};
     for (int i = 0; i < HOST_USAGE_ROWS && l->card.has_usage; i++) {
         const struct host_usage *u = &l->card.usage[i];

@@ -160,27 +160,29 @@ def dither(img, box, pattern='checker'):
 
 
 def mini_sofle(img, d, cx, y):
-    """A small two-half Sofle silhouette with column stagger and the encoder knob."""
-    stagger = [3, 3, 1, 0, 1, 2]  # outer pinky .. index column offsets
+    """A small two-half Eyelash Sofle: column stagger, the thumb row and the encoder knob.
+
+    Proportions follow boards/shields/eyelash_sofle/eyelash_sofle-layouts.dtsi at 4 px per key:
+    columns 0-1 sit half a key below column 3, and each half's thumb row is three keys under
+    columns 2-4 plus two angled 30 degrees toward the centre, each a step lower.
+    """
+    stagger = [2, 2, 1, 0, 1, 1]  # outer pinky .. index column offsets
     k, g = 3, 1                   # key size, gap
+    thumbs = [(2, stagger[2]), (3, stagger[3]), (4, stagger[4]), (5, 2), (6, 3)]  # (column, drop)
     def half(x0, mirror):
-        cols = list(range(6))
-        for c in cols:
-            cc = 5 - c if mirror else c
-            off = stagger[cc]
+        def col_x(c):
+            return x0 + ((5 - c) if mirror else c) * (k + g)
+        for c in range(6):
             for r in range(4):
-                xx = x0 + c * (k + g)
-                yy = y + off + r * (k + g)
+                xx, yy = col_x(c), y + stagger[c] + r * (k + g)
                 d.rectangle([xx, yy, xx + k - 1, yy + k - 1], fill=1)
-        # thumb row
-        for t in range(3):
-            tx = x0 + (2 + t) * (k + g) if not mirror else x0 + (1 - t + 3) * (k + g) - 4
-            ty = y + 4 * (k + g) + 2 + (t if not mirror else t)
-            d.rectangle([tx, ty, tx + k - 1, ty + k - 1], fill=1)
+        for c, drop in thumbs:
+            xx, yy = col_x(c), y + 4 * (k + g) + drop
+            d.rectangle([xx, yy, xx + k - 1, yy + k - 1], fill=1)
     half(cx - 30, False)
     half(cx + 7, True)
     # encoder knob on the left half's inner edge
-    d.ellipse([cx - 6, y + 12, cx - 1, y + 17], outline=1)
+    d.ellipse([cx - 6, y + 9, cx - 1, y + 14], outline=1)
 
 
 # ---------------------------------------------------------------- concepts

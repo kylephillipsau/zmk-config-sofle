@@ -58,13 +58,12 @@ drive. Keymap and left-screen changes only need the left half; right-screen art 
 lights macOS doesn't use, as raw HID output reports over Bluetooth or USB, and the firmware decodes
 them in `widgets/host_link.c` (the header documents the format).
 
-A report with Num Lock off carries three flags:
+A report with Num Lock off carries two flags, and either lights the ✳ badge:
 
-| Light | Meaning | On screen |
-|---|---|---|
-| Scroll Lock | some session is working | ✳ badge lit |
-| Compose | some session needs you (permission prompt) | ✳ badge lit |
-| Kana | a session finished since your last prompt in any session | nothing yet |
+| Light | Meaning |
+|---|---|
+| Scroll Lock | some session is working |
+| Compose | some session needs you (permission prompt) |
 
 Reports with Num Lock on are a frame, 2 bits per report in Scroll Lock and Compose, with Kana
 alternating so no two reports in a row match. A frame is a type byte, a fixed-length payload and a
@@ -109,7 +108,7 @@ rebuild), so the bundle is signed with an Apple Development certificate when the
 `install.sh` rebuilds only when the source changed.
 Other commands: `sofle-status cards` shows the card and sends it; `sofle-status time` syncs the
 clock; `sofle-status status` shows every session and the combined flags; `sofle-status
-idle|working|needs|done` shows flags by hand and pauses the hooks; `sofle-status resume` restarts
+idle|working|needs` shows flags by hand and pauses the hooks; `sofle-status resume` restarts
 them.
 
 `host/test_host_link.c` runs the firmware's decoder on the Mac against the reports the host would

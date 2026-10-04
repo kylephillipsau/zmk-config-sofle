@@ -120,6 +120,5 @@ void host_link_feed(struct host_link *link, uint8_t leds, int64_t now_ms) {
     link->nbits = 0;
 
     link->agent = ((leds & HOST_LED_SCROLL) ? AGENT_WORKING : 0) |
-                  ((leds & HOST_LED_COMPOSE) ? AGENT_NEEDS : 0) |
-                  ((leds & HOST_LED_KANA) ? AGENT_DONE : 0);
+                  ((leds & HOST_LED_COMPOSE) ? AGENT_NEEDS : 0);
 }

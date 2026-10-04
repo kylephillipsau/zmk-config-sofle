@@ -5,9 +5,8 @@
 // over USB or Bluetooth. The firmware decodes them in
 // boards/shields/nice_view_legend/widgets/host_link.c, which documents the format:
 //
-//   Num Lock off   Scroll Lock, Compose and Kana are three flags: some session is working,
-//                  needs you, or finished since your last prompt. Working or needs you lights
-//                  the ✳ badge.
+//   Num Lock off   Scroll Lock and Compose are two flags: some session is working, or needs
+//                  you. Either lights the ✳ badge.
 //   Num Lock on    a frame, 2 bits per report: the clock, the usage limits, or one repo row.
 //                  The next report with Num Lock off ends it and carries the flags again.
 //
@@ -30,7 +29,7 @@
 //   sofle-status daemon                    sync on connect and every minute
 //                                          (run by the au.kyle.sofle-status launch agent)
 //   sofle-status pause | resume            stop or restart hook updates of the flags
-//   sofle-status idle|working|needs|done   show flags by hand (also pauses hooks)
+//   sofle-status idle|working|needs        show flags by hand (also pauses hooks)
 //   sofle-status status                    show each session's state and the combined flags
 //   sofle-status encode                    print the reports `cards` would send, in hex
 //   sofle-status list | report <hex>       show matching keyboards / send a raw LED byte
@@ -49,9 +48,9 @@ let numBit: UInt8 = 1 << 0      // marks a frame report
 let capsBit: UInt8 = 1 << 1
 let workingBit: UInt8 = 1 << 2  // Scroll Lock
 let needsBit: UInt8 = 1 << 3    // Compose
-let doneBit: UInt8 = 1 << 4     // Kana
+let kanaBit: UInt8 = 1 << 4     // alternates in frame reports
 
-let manualStates: [String: UInt8] = ["idle": 0, "working": workingBit, "needs": needsBit, "done": doneBit]
+let manualStates: [String: UInt8] = ["idle": 0, "working": workingBit, "needs": needsBit]
 
 // Session states older than this are treated as stale (a session that crashed or was killed).
 let staleAfter: TimeInterval = 30 * 60
@@ -71,7 +70,6 @@ let stateDir = ProcessInfo.processInfo.environment["SOFLE_STATE_DIR"].map { URL(
     ?? fm.homeDirectoryForCurrentUser.appendingPathComponent(".cache/sofle-status")
 let sessionsDir = stateDir.appendingPathComponent("sessions")
 let projectsDir = stateDir.appendingPathComponent("projects")
-let lastPromptFile = stateDir.appendingPathComponent("last-prompt")
 let lastSentFile = stateDir.appendingPathComponent("last-sent")
 let pausedFile = stateDir.appendingPathComponent("paused")
 let lockFile = stateDir.appendingPathComponent("lock")
@@ -235,9 +233,8 @@ func show(_ bits: UInt8) {
     if let n = sendLEDs(withCaps(bits), wait: false), n > 0 { write(String(bits), to: lastSentFile) }
 }
 
-// Combine every live session into the three flags.
+// Combine every live session into the two flags.
 func aggregate() -> UInt8 {
-    let lastPrompt = modified(lastPromptFile) ?? .distantPast
     let files = (try? fm.contentsOfDirectory(at: sessionsDir, includingPropertiesForKeys: nil)) ?? []
     var bits: UInt8 = 0
     for file in files {
@@ -247,7 +244,6 @@ func aggregate() -> UInt8 {
         switch state {
         case "working" where age < staleAfter: bits |= workingBit
         case "needs" where age < staleAfter: bits |= needsBit
-        case "done" where at > lastPrompt: bits |= doneBit
         default: break
         }
     }
@@ -288,7 +284,7 @@ func frameReports(_ body: [UInt8]) -> [UInt8] {
             var report = numBit
             if chunk & 2 != 0 { report |= workingBit }
             if chunk & 1 != 0 { report |= needsBit }
-            if reports.count & 1 != 0 { report |= doneBit }
+            if reports.count & 1 != 0 { report |= kanaBit }
             reports.append(withCaps(report))
         }
     }
@@ -597,7 +593,6 @@ func recordHookEvent() -> Bool {
         try? fm.removeItem(at: file)
     case "UserPromptSubmit":
         write("working", to: file)
-        write("", to: lastPromptFile)  // clears "done" everywhere
     case "PostToolUse":  // also clears "needs" once a permission is approved
         write("working", to: file)
     case "PermissionRequest":
@@ -605,7 +600,7 @@ func recordHookEvent() -> Bool {
     case "Notification" where event["notification_type"] as? String == "permission_prompt":
         write("needs", to: file)
     case "Stop", "StopFailure":
-        write("done", to: file)
+        write("idle", to: file)
     default:
         break
     }
@@ -676,6 +671,7 @@ var isDirectory: ObjCBool = false
 if fm.fileExists(atPath: stateDir.path, isDirectory: &isDirectory), !isDirectory.boolValue {
     try? fm.removeItem(at: stateDir)
 }
+try? fm.removeItem(at: stateDir.appendingPathComponent("last-prompt"))  // used by the old "done" flag
 
 let args = Array(CommandLine.arguments.dropFirst())
 switch args.first {
@@ -713,15 +709,13 @@ case let name? where manualStates[name] != nil:
     try? fm.removeItem(at: lastSentFile)
     show(manualStates[name]!)
 case "status":
-    let lastPrompt = modified(lastPromptFile)
     for file in ((try? fm.contentsOfDirectory(at: sessionsDir, includingPropertiesForKeys: nil)) ?? []).sorted(by: { $0.path < $1.path }) {
         let state = (try? String(contentsOf: file, encoding: .utf8)) ?? "?"
         let age = modified(file).map { Int(Date().timeIntervalSince($0)) } ?? -1
         print("\(file.lastPathComponent.prefix(8))  \(state)  \(age)s ago")
     }
     let bits = aggregate()
-    let names = [(workingBit, "working"), (needsBit, "needs"), (doneBit, "done")].filter { bits & $0.0 != 0 }.map { $0.1 }
-    print("last prompt: \(lastPrompt.map { "\(Int(Date().timeIntervalSince($0)))s ago" } ?? "never")")
+    let names = [(workingBit, "working"), (needsBit, "needs")].filter { bits & $0.0 != 0 }.map { $0.1 }
     print("flags: \(names.isEmpty ? "none" : names.joined(separator: " + "))\(fm.fileExists(atPath: pausedFile.path) ? "  (hooks paused)" : "")")
 case "list":
     let devices = keyboards()
@@ -731,7 +725,7 @@ case "report":
     let bits = UInt8(args.count > 1 ? args[1] : "0", radix: 16) ?? 0
     print("sent 0x\(String(bits, radix: 16)) to \(sendLEDs(bits) ?? 0) keyboard interface(s)")
 default:
-    print("usage: sofle-status hook | statusline | push | cards | time | daemon | pause | resume | status | idle|working|needs|done | encode | list | report <hex>")
+    print("usage: sofle-status hook | statusline | push | cards | time | daemon | pause | resume | status | idle|working|needs | encode | list | report <hex>")
     exit(2)
 }
 // Exit 0 even when the keyboard is asleep or disconnected, so a Claude Code hook never fails.
