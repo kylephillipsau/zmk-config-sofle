@@ -1307,3 +1307,129 @@ if __name__ == '__main__':
         sheet.paste(preview(im, 3), (i * (W * 3 + 12), 0))
     sheet.save('out/sheet.png')
     print('ok', list(out))
+
+
+# ------------------------------------------------ cards for the area below the clock (ideas, v3)
+
+CHECK = glyph(["......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."])
+BANG = glyph(["##", "##", "##", "##", "..", "##"])
+DOT5 = glyph([".###.", "#####", "#####", "#####", ".###."])
+RING5 = glyph([".###.", "#...#", "#...#", "#...#", ".###."])
+UP = glyph(["..#..", ".###.", "#####", "..#..", "..#.."])
+CLOUD = glyph(["....###....", "..##...##..", ".#.......#.", "#.........#", "#.........#", ".#########."])
+CARD_TOP = 106
+
+
+def card_frame(clock=(10, 18, 'AM'), wpm=64):
+    """Status area, clock and the small WPM/AM-PM row, with the card area blank."""
+    img = spec_left(clock=clock, wpm=[0] * 29 + [wpm])
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 103, W - 1, 159], fill=0)
+    d.line([(0, 104), (W - 1, 104)], fill=1)
+    return img, d
+
+
+def card_next():
+    img, d = card_frame()
+    lv_text(img, 'silkscreen_bold_8', 1, 30, CARD_TOP + 2, 'l', 'NEXT')
+    lv_text(img, 'silkscreen_bold_8', 0, W, CARD_TOP + 2, 'r', 'IN 12M')
+    lv_text(img, 'silkscreen_8', 1, W - 1, CARD_TOP + 16, 'l', 'STANDUP')
+    lv_text(img, 'silkscreen_8', 1, W - 1, CARD_TOP + 25, 'l', 'WITH TEAM')
+    d.line([(0, CARD_TOP + 35), (W - 1, CARD_TOP + 35)], fill=1)
+    lv_text(img, 'silkscreen_8', 1, W - 1, CARD_TOP + 40, 'l', '10:30-10:45')
+    return img
+
+
+def card_projects():
+    img, d = card_frame()
+    rows = [('needs', 'TIMESPACE'), ('working', 'ZMK-CONFIG'), ('working', 'SITEDIFF'), ('done', 'MUSIC-CLI')]
+    y = CARD_TOP
+    for state, name in rows:
+        if state == 'needs':
+            d.rectangle([0, y, W - 1, y + 11], fill=1)
+            blit(img, BANG, 3, y + 3, ink=0)
+            lv_text(img, 'silkscreen_bold_8', 9, 58, y + 4, 'l', name, fill=0)
+        else:
+            g = CLAUDE_SPARK if state == 'working' else CHECK
+            blit(img, g, 0 if state == 'working' else 1, y + (1 if state == 'working' else 3))
+            lv_text(img, 'silkscreen_8', 11, 56, y + 4, 'l', name)
+        y += 13
+    return img
+
+
+def card_repos():
+    img, d = card_frame()
+    rows = [('TIMESPACE', 'ok'), ('ZMK-CONFIG', 'fail'), ('SITEDIFF', 'run'), ('NYLONITE', 'ok')]
+    y = CARD_TOP + 1
+    for name, ci in rows:
+        lv_text(img, 'silkscreen_8', 1, 59, y + 3, 'l', name)
+        g = {'ok': CHECK, 'fail': CROSS, 'run': RING5}[ci]
+        blit(img, g, W - 1 - len(g[0]), y + 2)
+        y += 13
+    return img
+
+
+def card_mac():
+    img, d = card_frame()
+    lv_text(img, 'silkscreen_8', 1, 20, CARD_TOP + 2, 'l', 'CPU')
+    lv_text(img, 'silkscreen_bold_8', 0, W, CARD_TOP + 2, 'r', '34%')
+    vals = [4, 6, 5, 9, 14, 11, 7, 5, 9, 15, 17, 12, 8, 6, 7, 10, 13, 9, 11, 14, 12, 8]
+    for i, v in enumerate(vals):
+        x = 1 + i * 3
+        d.rectangle([x, CARD_TOP + 27 - v, x + 1, CARD_TOP + 27], fill=1)
+    for row, (label, pct, bolt) in enumerate([('MEM', 61, False), ('BAT', 82, True)]):
+        y = CARD_TOP + 32 + row * 10
+        lv_text(img, 'silkscreen_8', 1, 20, y, 'l', label)
+        d.rectangle([20, y, 46, y + 5], outline=1)
+        d.rectangle([22, y + 2, 22 + round(22 * pct / 100), y + 3], fill=1)
+        lv_text(img, 'silkscreen_bold_8', 0, W, y, 'r', str(pct))
+        if bolt:
+            blit(img, BOLT_G, 48, y)
+    return img
+
+
+def card_today():
+    img, d = card_frame()
+    lv_text(img, 'silkscreen_bold_8', 1, W - 1, CARD_TOP + 2, 'l', 'SAT 4 OCT')
+    blit(img, CLOUD, 2, CARD_TOP + 16)
+    lv_text(img, 'jersey_2x', 0, W - 1, CARD_TOP + 13, 'r', '19')
+    lv_text(img, 'silkscreen_8', 1, W - 1, CARD_TOP + 27, 'l', 'CLOUDY')
+    d.line([(0, CARD_TOP + 37), (W - 1, CARD_TOP + 37)], fill=1)
+    lv_text(img, 'silkscreen_8', 1, 34, CARD_TOP + 42, 'l', 'HI 23')
+    lv_text(img, 'silkscreen_8', 0, W, CARD_TOP + 42, 'r', 'LO 12')
+    return img
+
+
+def render_cards():
+    os.makedirs('out', exist_ok=True)
+    out = {'card_next': card_next(), 'card_projects': card_projects(), 'card_repos': card_repos(),
+           'card_mac': card_mac(), 'card_today': card_today()}
+    for k, im in out.items():
+        im.save(f'out/mock_{k}.png')
+        preview(im, 4).save(f'out/mock_{k}@4x.png')
+    sheet = Image.new('RGB', (len(out) * (W * 3 + 12), H * 3), (255, 255, 255))
+    for i, im in enumerate(out.values()):
+        sheet.paste(preview(im, 3), (i * (W * 3 + 12), 0))
+    sheet.crop((0, 180, sheet.width, H * 3)).save('out/cards_sheet.png')
+    return out
+
+
+def card_usage():
+    img, d = card_frame()
+    for row, (label, pct, note) in enumerate([('5 HR', 62, 'RESETS 2:40'), ('WEEK', 31, 'RESETS TUE')]):
+        y = CARD_TOP + 1 + row * 26
+        lv_text(img, 'silkscreen_bold_8', 1, 46, y + 1, 'l', label)
+        lv_text(img, 'silkscreen_bold_8', 0, W, y + 1, 'r', f'{pct}%')
+        d.rectangle([0, y + 9, W - 1, y + 14], outline=1)
+        dither(img, (2, y + 11, 2 + round((W - 4) * pct / 100), y + 13), 'checker')
+        d.rectangle([2, y + 11, 1 + round((W - 4) * pct / 100), y + 12], fill=1)
+        lv_text(img, 'silkscreen_8', 1, W - 1, y + 18, 'l', note)
+    return img
+
+
+def render_cards_v2():
+    out = render_cards()
+    out['card_usage'] = card_usage()
+    out['card_usage'].save('out/mock_card_usage.png')
+    preview(out['card_usage'], 4).save('out/mock_card_usage@4x.png')
+    return out

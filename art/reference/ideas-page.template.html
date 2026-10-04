@@ -117,6 +117,76 @@
   </div>
 
 
+
+  <section class="side" id="below-clock">
+    <div class="side-head">
+      <h2 class="side-title">Below the clock</h2>
+      <p>The clock proved the Mac can send data to the keyboard, so the area below it can show anything the Mac knows. Each card replaces the WPM chart and Claude banners; the ✳ badge keeps flagging sessions that need you. The channel is slow (a few hundred bits a second), which suits short text refreshed every minute or on change. Several cards could rotate with a key such as <kbd>L2</kbd>+<kbd>M</kbd>.</p>
+    </div>
+    <div class="grid">
+      <article class="card pick">
+        <div class="stage"><figure><div class="bezel"><img src="{card_next}" alt="Next calendar event: standup with team in 12 minutes, 10:30 to 10:45"></div><figcaption>up next</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Up next</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>Your next calendar event and a countdown to it. The keyboard counts down on its own from the event's start time, so it only needs an update when your calendar changes.</p>
+          <dl>
+            <dt>Source</dt><dd>macOS Calendar (iCloud, Google or Exchange accounts added in Calendar). The agent asks for Calendar access once.</dd>
+          </dl>
+          <span class="pickline">My pick: the most useful next to a clock.</span>
+        </div>
+      </article>
+      <article class="card">
+        <div class="stage"><figure><div class="bezel"><img src="{card_projects}" alt="Projects with Claude sessions: timespace needs you, zmk-config and sitediff working, music-cli done"></div><figcaption>projects</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Projects</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>Your Claude sessions grouped by project, so the badge's alert comes with the name of the project that needs you. The one waiting on you is inverted at the top.</p>
+          <dl>
+            <dt>Source</dt><dd>The Claude Code hooks already running: each event carries its working folder, which maps to a repo name</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card">
+        <div class="stage"><figure><div class="bezel"><img src="{card_repos}" alt="Repos and CI: timespace passing, zmk-config failed, sitediff running, nylonite passing"></div><figcaption>repos and CI</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Repos &amp; CI</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>The latest GitHub Actions result for the repos you've touched recently: passing, failed, or still running. It catches a broken build without opening GitHub.</p>
+          <dl>
+            <dt>Source</dt><dd><code>gh run list</code> with your existing GitHub login, every few minutes, for repos your sessions have worked in</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card">
+        <div class="stage"><figure><div class="bezel"><img src="{card_mac}" alt="Mac status: CPU 34% with a usage graph, memory 61%, battery 82% and charging"></div><figcaption>your Mac</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Your Mac</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>CPU load with a short history, memory pressure, and the MacBook's battery. Handy with a lot of agents and builds running at once.</p>
+          <dl>
+            <dt>Source</dt><dd>macOS system statistics; no extra permission</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card">
+        <div class="stage"><figure><div class="bezel"><img src="{card_usage}" alt="Claude usage: 5-hour window 62% used, resets 2:40; weekly 31% used, resets Tuesday"></div><figcaption>claude usage</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Claude usage</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>How much of your plan's 5-hour and weekly usage windows you've used, and when each resets. Useful with many sessions running at once.</p>
+          <dl>
+            <dt>Source</dt><dd>Claude Code passes <code>rate_limits.five_hour</code> and <code>rate_limits.seven_day</code> (used percentage and reset time) to a status-line script. This needs a small status line, which you don't have yet; it can also show a compact line in your terminal.</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card">
+        <div class="stage"><figure><div class="bezel"><img src="{card_today}" alt="Today: Saturday 4 October, 19 degrees and cloudy, high 23, low 12"></div><figcaption>today</figcaption></figure></div>
+        <div class="body">
+          <div class="title-row"><h2>Today</h2><span class="chip host">FROM YOUR MAC</span></div>
+          <p>The date under the time, with the current temperature and today's high and low.</p>
+          <dl>
+            <dt>Source</dt><dd>The date rides along with the clock sync. Weather comes from Open-Meteo, which is free and needs no account, for a location you set.</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
   <section class="side" id="left">
     <div class="side-head">
       <h2 class="side-title">Left screen</h2>
