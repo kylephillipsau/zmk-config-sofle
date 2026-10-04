@@ -1532,3 +1532,96 @@ def spec_usage_event(event=('IN 12M', '10:30', 'WEEKLY PLANNING WITH DESIGN'), *
     for i, line in enumerate(lv_wrap('silkscreen_8', title, W - 2)):
         lv_text(img, 'silkscreen_8', 1, W - 2, 148 + i * 7, 'l', line)
     return img
+
+
+# ------------------------------------------- Tetris on the right screen (v6 spec)
+
+TETROMINOES = {  # cells (x, y) in spawn orientation
+    'I': [(0, 1), (1, 1), (2, 1), (3, 1)], 'O': [(1, 0), (2, 0), (1, 1), (2, 1)],
+    'T': [(1, 0), (0, 1), (1, 1), (2, 1)], 'S': [(1, 0), (2, 0), (0, 1), (1, 1)],
+    'Z': [(0, 0), (1, 0), (1, 1), (2, 1)], 'J': [(0, 0), (0, 1), (1, 1), (2, 1)],
+    'L': [(2, 0), (0, 1), (1, 1), (2, 1)],
+}
+WELL_X, WELL_Y, CELL = 3, 38, 6  # border box origin (portrait), cell pitch
+
+
+def tetris_block(d, x, y, style):
+    if style == 'solid':
+        d.rectangle([x, y, x + 4, y + 4], fill=1)
+    elif style == 'bevel':
+        d.rectangle([x, y, x + 4, y + 4], fill=1)
+        d.point([(x + 1, y + 1)], fill=0)
+    elif style == 'hollow':
+        d.rectangle([x, y, x + 4, y + 4], outline=1)
+        d.point([(x + 2, y + 2)], fill=1)
+    elif style == 'ghost':
+        d.point([(x, y), (x + 4, y), (x, y + 4), (x + 4, y + 4), (x + 2, y + 2)], fill=1)
+
+
+def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240, level=3, lines=12,
+                style='hollow', piece_style='solid'):
+    """The right screen during a game. Mirrors widgets/tetris.c."""
+    img, d = new()
+    status_bar(img, d)
+    # header: score, level and lines; the next piece on the right
+    lv_text(img, 'silkscreen_bold_8', 1, 44, 23, 'l', str(score))
+    lv_text(img, 'silkscreen_8', 1, 44, 31, 'l', f'LV{level} L{lines}')
+    for cx, cy in TETROMINOES[nxt]:
+        d.rectangle([48 + cx * 4, 24 + cy * 4, 48 + cx * 4 + 2, 24 + cy * 4 + 2], fill=1)
+    # well
+    d.rectangle([WELL_X, WELL_Y, WELL_X + 10 * CELL + 1, WELL_Y + 20 * CELL + 1], outline=1)
+    def cell_xy(c, r):
+        return WELL_X + 1 + c * CELL, WELL_Y + 1 + r * CELL
+    board = board or [
+        '..........', '..........', '..........', '..........', '..........', '..........',
+        '..........', '..........', '..........', '..........', '..........', '..........',
+        '..........', '..........', '......#...', '.....###..', '#.....##..', '##..####.#',
+        '###.######', '####.#####',
+    ]
+    for r, row in enumerate(board):
+        for c, ch in enumerate(row):
+            if ch == '#':
+                tetris_block(d, *cell_xy(c, r), style)
+    name, px, py = piece
+    if ghost_y is None:  # where the piece would land
+        def free(y):
+            return all(y + cy < 20 and board[y + cy][px + cx] == '.' for cx, cy in TETROMINOES[name])
+        ghost_y = py
+        while free(ghost_y + 1):
+            ghost_y += 1
+    for cx, cy in TETROMINOES[name]:
+        tetris_block(d, *cell_xy(px + cx, ghost_y + cy), 'ghost')
+    for cx, cy in TETROMINOES[name]:
+        tetris_block(d, *cell_xy(px + cx, py + cy), piece_style)
+    return img
+
+
+def spec_tetris_title(best=4820):
+    """Before the first game: the title, the best score and how to start."""
+    img, d = new()
+    status_bar(img, d)
+    d.rectangle([WELL_X, WELL_Y, WELL_X + 10 * CELL + 1, WELL_Y + 20 * CELL + 1], outline=1)
+    lv_text(img, 'jersey_1x', 0, W, 58, 'c', 'TETRIS')
+    for c, r, name in ((1, 0, 'T'), (5, 1, 'S'), (2, 2, 'L')):  # a little stack under the title
+        for cx, cy in TETROMINOES[name]:
+            tetris_block(d, 22 + (c + cx) * CELL - 12, 78 + (r + cy) * CELL, 'hollow')
+    lv_text(img, 'silkscreen_8', 0, W, 112, 'c', 'BEST')
+    lv_text(img, 'silkscreen_bold_8', 0, W, 121, 'c', str(best))
+    lv_text(img, 'silkscreen_8', 0, W, 140, 'c', 'PRESS THE')
+    lv_text(img, 'silkscreen_8', 0, W, 148, 'c', 'STICK')
+    return img
+
+
+def spec_tetris_over(score=1240, best=4820, new_best=False):
+    """Game over: a box over the stack with the score and how to play again."""
+    img = spec_tetris(board=['..........'] * 4 + ['....#.....', '...###....'] + ['#.##.####.', '####.#####'] * 7,
+                      piece=('O', 3, 0), ghost_y=0, style='hollow')
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 66, W - 1, 125], fill=0, outline=1)
+    d.rectangle([0, 66, W - 1, 77], fill=1)
+    lv_text(img, 'silkscreen_bold_8', 0, W, 70, 'c', 'GAME OVER', fill=0)
+    lv_text(img, 'silkscreen_bold_8', 0, W, 83, 'c', str(score))
+    lv_text(img, 'silkscreen_8', 0, W, 92, 'c', 'NEW BEST' if new_best else f'BEST {best}')
+    lv_text(img, 'silkscreen_8', 0, W, 107, 'c', 'PRESS TO')
+    lv_text(img, 'silkscreen_8', 0, W, 115, 'c', 'PLAY AGAIN')
+    return img
