@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  *
  * Left (central) screen: a status area (both batteries, layer, Bluetooth slots, held modifiers,
- * Claude Code badge) above a live WPM chart, whose header turns into a Claude Code banner. The layout mirrors spec_left() in art/concepts.py, and the
- * fonts and icons are generated from the same sources, so the mockups match the device.
+ * Claude Code badge) above the clock, WPM, and a card fed by host/sofle-status: Claude usage
+ * limits and CI for recent repos. The layout mirrors spec_left() and spec_usage_ci() in
+ * art/concepts.py, and the fonts and icons are generated from the same sources, so the mockups
+ * match the device.
  *
  * The screen is three 68x68 canvases stacked in portrait order (rows 0-67, 68-135, 136-159),
  * each drawn upright and then rotated into the panel's landscape orientation.
@@ -24,6 +26,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <dt-bindings/zmk/modifiers.h>
 #include <zmk/battery.h>
 #include <zmk/display.h>
+#include "host_link.h"
 #include "status.h"
 #include "status_glyphs.h"
 #include <zmk/events/usb_conn_state_changed.h>
@@ -56,8 +59,8 @@ LV_FONT_DECLARE(lv_font_jersey_2x);
 #define MIDDLE_Y 68 // first portrait row of the middle canvas
 #define BOTTOM_Y 136
 
-#define CHART_TOP 106
-#define CHART_BOTTOM 156
+#define USAGE_Y 108 // capitals of the first usage row; rows are 14 px apart
+#define REPOS_Y 139 // capitals of the first repo row; rows are 7 px apart
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -87,10 +90,11 @@ struct mods_state {
     uint8_t mods;
 };
 
-struct agent_state {
+struct host_state {
     uint8_t agent;
     int32_t clock_base_s;
     int64_t clock_sync_ms;
+    struct host_card card;
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -164,30 +168,27 @@ static void draw_text(const struct frame *f, const lv_font_t *font, int x, int w
     lv_canvas_draw_text(f->canvas, x, cap_y - cap_top(font) - f->y0, w, &dsc, text);
 }
 
-static void draw_line(const struct frame *f, int x0, int y0, int x1, int y1, lv_color_t c) {
-    int dx = abs(x1 - x0), dy = -abs(y1 - y0);
-    int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy;
-    while (true) {
-        put_px(f, x0, y0, c);
-        if (x0 == x1 && y0 == y1) {
+// Copy text into out, dropping characters from the end until it fits w px, then any '-', '_', '.'
+// or space left dangling. Mirrors lv_fit() in art/concepts.py.
+static void fit_text(const lv_font_t *font, const char *text, int w, char *out, size_t size) {
+    snprintf(out, size, "%s", text);
+    size_t len = strlen(out);
+    bool cut = false;
+    while (len > 0) {
+        lv_font_glyph_dsc_t g;
+        int trailing = 0; // the last glyph's advance past its ink is spacing, not ink
+        if (lv_font_get_glyph_dsc(font, &g, (uint8_t)out[len - 1], 0)) {
+            trailing = g.adv_w - (g.ofs_x + g.box_w);
+        }
+        if (lv_txt_get_width(out, len, font, 0, LV_TEXT_FLAG_EXPAND) - trailing <= w) {
             break;
         }
-        int e2 = 2 * err;
-        if (e2 >= dy) {
-            err += dy;
-            x0 += sx;
-        }
-        if (e2 <= dx) {
-            err += dx;
-            y0 += sy;
-        }
+        out[--len] = '\0';
+        cut = true;
     }
-}
-
-static int floor_div(int a, int b) {
-    int q = a / b;
-    return (a % b != 0 && ((a < 0) != (b < 0))) ? q - 1 : q;
+    while (cut && len > 0 && strchr("-_. ", out[len - 1])) {
+        out[--len] = '\0';
+    }
 }
 
 static struct frame frame_for(lv_obj_t *widget, struct zmk_widget_status *w, int index) {
@@ -316,7 +317,7 @@ static void draw_status(lv_obj_t *widget, struct zmk_widget_status *w) {
 }
 
 /* ---------------------------------------------------------------------------------------------
- * WPM module (middle and bottom canvases)
+ * Module (middle and bottom canvases): clock, WPM and the card
  */
 
 // Big time of day in the module header. The keyboard keeps time from the last sync with the host.
@@ -348,7 +349,7 @@ static void draw_wpm_label(const struct frame *f, const struct status_state *sta
     char number[4];
 
     draw_text(f, &lv_font_silkscreen_8, 1, 30, 97, LV_TEXT_ALIGN_LEFT, ink, "WPM");
-    snprintf(number, sizeof(number), "%d", state->wpm[WPM_HISTORY - 1]);
+    snprintf(number, sizeof(number), "%d", state->wpm);
     draw_text(f, &lv_font_silkscreen_bold_8, 22, 30, 97, LV_TEXT_ALIGN_LEFT, ink, number);
 
 #if !IS_ENABLED(CONFIG_NICE_VIEW_LEGEND_CLOCK_24H)
@@ -361,67 +362,82 @@ static void draw_wpm_label(const struct frame *f, const struct status_state *sta
 #endif
 }
 
-// Claude Code banner over the top of the chart: solid while Claude needs you, outlined when done.
-static void draw_agent_banner(const struct frame *f, const struct status_state *state) {
-    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
+// One usage limit: name, percent used and when it resets, over a bar filled to the percent.
+static void draw_usage_row(const struct frame *f, int y, const char *name,
+                           const struct host_usage *u) {
+    lv_color_t ink = LVGL_FOREGROUND;
+    char text[6];
 
-    if (!(state->agent & (AGENT_NEEDS | AGENT_DONE))) {
+    draw_text(f, &lv_font_silkscreen_bold_8, 1, 14, y, LV_TEXT_ALIGN_LEFT, ink, name);
+    if (u->pct == HOST_PCT_UNKNOWN) {
+        draw_text(f, &lv_font_silkscreen_8, 0, SCREEN_W, y, LV_TEXT_ALIGN_RIGHT, ink, "--");
         return;
     }
-    bool solid = (state->agent & AGENT_NEEDS) != 0; // needs you wins over done
-    lv_color_t text = solid ? paper : ink;
-
-    fill(f, 0, 94, SCREEN_W, 26, solid ? ink : paper);
-    if (!solid) {
-        outline(f, 0, 94, SCREEN_W, 26, ink);
+    int pct = MIN(u->pct, 100);
+    const char *label = u->label;
+    if (u->reset_ms != 0 && k_uptime_get() >= u->reset_ms) {
+        pct = 0; // the limit has reset since the host last said
+        label = "";
     }
-    draw_text(f, &lv_font_jersey_1x, 0, SCREEN_W, 98, LV_TEXT_ALIGN_CENTER, text, "CLAUDE");
-    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 111, LV_TEXT_ALIGN_CENTER, text,
-              solid ? "NEEDS YOU" : "DONE");
+    // at 100% the reset time matters most, and "100%" would run into a time like 12:55
+    if (pct >= 100) {
+        snprintf(text, sizeof(text), "MAX");
+    } else {
+        snprintf(text, sizeof(text), "%d%%", pct);
+    }
+    draw_text(f, &lv_font_silkscreen_bold_8, 16, 24, y, LV_TEXT_ALIGN_LEFT, ink, text);
+    if (label[0] != '\0') {
+        draw_text(f, &lv_font_silkscreen_8, 0, SCREEN_W, y, LV_TEXT_ALIGN_RIGHT, ink, label);
+    }
+    outline(f, 0, y + 7, SCREEN_W, 4, ink);
+    if (pct > 0) {
+        fill(f, 0, y + 7, (SCREEN_W - 1) * pct / 100 + 1, 4, ink);
+    }
 }
 
-static void draw_wpm_into(const struct frame *f, const struct status_state *state) {
-    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
-    const uint8_t *hist = state->wpm;
-    int hi = 10; // floor for the chart scale, so near-zero typing doesn't fill the chart
-    int px[WPM_HISTORY], py[WPM_HISTORY];
+// The card under the clock: Claude's 5 hour and weekly limits, then CI for 3 recent repos.
+static void draw_card(const struct frame *f, const struct status_state *state) {
+    static const struct glyph *const ci_glyphs[] = {
+        [HOST_CI_OK] = &glyph_ci_ok,
+        [HOST_CI_FAIL] = &glyph_ci_fail,
+        [HOST_CI_RUNNING] = &glyph_ci_running,
+    };
+    static const char *const usage_names[HOST_USAGE_ROWS] = {"5H", "WK"};
+    const struct host_card *card = &state->card;
+    lv_color_t ink = LVGL_FOREGROUND;
+    char name[HOST_REPO_NAME + 1];
 
-    fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, paper);
-    draw_clock(f, state);
-    draw_wpm_label(f, state);
-
-    for (int i = 0; i < WPM_HISTORY; i++) {
-        hi = MAX(hi, hist[i]);
+    fill(f, 0, 104, SCREEN_W, 1, ink);
+    for (int i = 0; i < HOST_USAGE_ROWS; i++) {
+        draw_usage_row(f, USAGE_Y + i * 14, usage_names[i], &card->usage[i]);
     }
-    for (int i = 0; i < WPM_HISTORY; i++) {
-        px[i] = i * (SCREEN_W - 1) / (WPM_HISTORY - 1);
-        py[i] = CHART_BOTTOM - hist[i] * (CHART_BOTTOM - CHART_TOP) / hi;
-    }
 
-    // checkerboard fill under the line, then the line itself
-    for (int i = 0; i < WPM_HISTORY - 1; i++) {
-        int x_end = px[i + 1] + (i == WPM_HISTORY - 2 ? 1 : 0);
-        for (int x = px[i]; x < x_end; x++) {
-            int y_line = py[i] + floor_div((py[i + 1] - py[i]) * (x - px[i]),
-                                           MAX(1, px[i + 1] - px[i]));
-            for (int y = y_line + 1; y <= CHART_BOTTOM; y++) {
-                if ((x + y) % 2 == 0) {
-                    put_px(f, x, y, ink);
-                }
-            }
+    fill(f, 0, 135, SCREEN_W, 1, ink);
+    for (int i = 0; i < HOST_REPO_ROWS; i++) {
+        const struct host_repo *repo = &card->repos[i];
+        int y = REPOS_Y + i * 7;
+        if (repo->name[0] != '\0') {
+            fit_text(&lv_font_silkscreen_8, repo->name, 58, name, sizeof(name));
+            draw_text(f, &lv_font_silkscreen_8, 1, 58, y, LV_TEXT_ALIGN_LEFT, ink, name);
+        }
+        const struct glyph *g = repo->ci < ARRAY_SIZE(ci_glyphs) ? ci_glyphs[repo->ci] : NULL;
+        if (g != NULL) {
+            draw_glyph(f, SCREEN_W - 1 - g->w, y, g, ink);
         }
     }
-    for (int i = 0; i < WPM_HISTORY - 1; i++) {
-        draw_line(f, px[i], py[i], px[i + 1], py[i + 1], ink);
-    }
-    fill(f, 0, CHART_BOTTOM + 1, SCREEN_W, 1, ink);
-    draw_agent_banner(f, state);
 }
 
-static void draw_wpm(lv_obj_t *widget, struct zmk_widget_status *w) {
+static void draw_module_into(const struct frame *f, const struct status_state *state) {
+    fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, LVGL_BACKGROUND);
+    draw_clock(f, state);
+    draw_wpm_label(f, state);
+    draw_card(f, state);
+}
+
+static void draw_module(lv_obj_t *widget, struct zmk_widget_status *w) {
     for (int i = 1; i <= 2; i++) {
         struct frame f = frame_for(widget, w, i);
-        draw_wpm_into(&f, &w->state);
+        draw_module_into(&f, &w->state);
         rotate_canvas(f.canvas, f.buf);
     }
 }
@@ -598,100 +614,68 @@ static void schedule_clock_tick(const struct status_state *state) {
 static void clock_tick(struct k_work *work) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        draw_wpm(widget->obj, widget);
+        draw_module(widget->obj, widget);
         schedule_clock_tick(&widget->state);
     }
 }
 
-static void agent_update_cb(struct agent_state state) {
+static void host_update_cb(struct host_state state) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         bool agent_changed = widget->state.agent != state.agent;
         bool clock_changed = widget->state.clock_sync_ms != state.clock_sync_ms ||
                              widget->state.clock_base_s != state.clock_base_s;
-        if (!agent_changed && !clock_changed) {
+        bool card_changed = memcmp(&widget->state.card, &state.card, sizeof(state.card)) != 0;
+        if (!agent_changed && !clock_changed && !card_changed) {
             continue;
         }
         widget->state.agent = state.agent;
         widget->state.clock_base_s = state.clock_base_s;
         widget->state.clock_sync_ms = state.clock_sync_ms;
+        widget->state.card = state.card;
         if (agent_changed) {
             draw_status(widget->obj, widget); // badge
         }
-        draw_wpm(widget->obj, widget); // banner and clock
+        if (clock_changed || card_changed) {
+            draw_module(widget->obj, widget);
+        }
         if (clock_changed) {
             schedule_clock_tick(&widget->state);
         }
     }
 }
 
+// host/sofle-status sends Claude Code's flags, the time and the card in indicator lights macOS
+// doesn't use (see host_link.h). Caps Lock is masked out, so it never disturbs them.
+static struct host_state host_get_state(const zmk_event_t *eh) {
+    static struct host_link link;
+    static bool initialized;
+    if (!initialized) {
+        host_link_init(&link);
+        initialized = true;
+    }
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-#define LED_NUM BIT(HID_USAGE_LED_NUM_LOCK - 1)
-#define LED_SCROLL BIT(HID_USAGE_LED_SCROLL_LOCK - 1)
-#define LED_COMPOSE BIT(HID_USAGE_LED_COMPOSE - 1)
-#define LED_KANA BIT(HID_USAGE_LED_KANA - 1)
-
-// A clock sync is this many reports with Num Lock on, each carrying 2 bits (Scroll Lock, Compose)
-// with Kana alternating 0, 1, 0, ...: 18 bits of minute of day (11), second (6) and even parity.
-// The next report with Num Lock off ends it and carries the Claude flags.
-#define CLOCK_FRAME_REPORTS 9
+    host_link_feed(&link, zmk_hid_indicators_get_current_profile(), k_uptime_get());
 #endif
-
-// host/sofle-status sends Claude Code's flags (Scroll Lock, Compose, Kana) and clock syncs in
-// indicator lights macOS doesn't use. Caps Lock is masked out, so it never disturbs either.
-static struct agent_state agent_get_state(const zmk_event_t *eh) {
-    static struct agent_state state = {.clock_base_s = -1};
-#if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    static int last = -1;
-    static uint32_t frame;
-    static int reports;
-
-    int leds = zmk_hid_indicators_get_current_profile() &
-               (LED_NUM | LED_SCROLL | LED_COMPOSE | LED_KANA);
-    // A report for another endpoint re-raises the current value, so skip repeats.
-    if (leds == last) {
-        return state;
-    }
-    last = leds;
-
-    if (leds & LED_NUM) {
-        bool toggle = (leds & LED_KANA) != 0;
-        if (reports < 0 || reports >= CLOCK_FRAME_REPORTS || toggle != (reports & 1)) {
-            reports = -1; // malformed: ignore the rest of this sync
-        } else {
-            frame = (frame << 2) | ((leds & LED_SCROLL) ? 2 : 0) | ((leds & LED_COMPOSE) ? 1 : 0);
-            reports++;
-        }
-        return state;
-    }
-
-    if (reports == CLOCK_FRAME_REPORTS && __builtin_parity(frame) == 0) {
-        int minute_of_day = frame >> 7, second = (frame >> 1) & 0x3f;
-        if (minute_of_day < 24 * 60 && second < 60) {
-            state.clock_base_s = minute_of_day * 60 + second;
-            state.clock_sync_ms = k_uptime_get();
-        }
-    }
-    reports = 0;
-    frame = 0;
-
-    state.agent = ((leds & LED_SCROLL) ? AGENT_WORKING : 0) |
-                  ((leds & LED_COMPOSE) ? AGENT_NEEDS : 0) | ((leds & LED_KANA) ? AGENT_DONE : 0);
-#endif
-    return state;
+    return (struct host_state){.agent = link.agent,
+                               .clock_base_s = link.clock_base_s,
+                               .clock_sync_ms = link.clock_sync_ms,
+                               .card = link.card};
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_agent, struct agent_state, agent_update_cb, agent_get_state)
+ZMK_DISPLAY_WIDGET_LISTENER(widget_host, struct host_state, host_update_cb, host_get_state)
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-ZMK_SUBSCRIPTION(widget_agent, zmk_hid_indicators_changed);
+ZMK_SUBSCRIPTION(widget_host, zmk_hid_indicators_changed);
 #endif
 
 static void wpm_status_update_cb(struct wpm_status_state state) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        memmove(widget->state.wpm, widget->state.wpm + 1, WPM_HISTORY - 1);
-        widget->state.wpm[WPM_HISTORY - 1] = state.wpm;
-        draw_wpm(widget->obj, widget);
+        if (widget->state.wpm == state.wpm) {
+            continue;
+        }
+        widget->state.wpm = state.wpm;
+        draw_module(widget->obj, widget);
     }
 }
 
@@ -718,6 +702,9 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
 
     widget->state.peripheral_battery = -1;
     widget->state.clock_base_s = -1;
+    for (int i = 0; i < HOST_USAGE_ROWS; i++) {
+        widget->state.card.usage[i].pct = HOST_PCT_UNKNOWN;
+    }
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();
@@ -725,7 +712,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget_output_status_init();
     widget_layer_status_init();
     widget_mods_init();
-    widget_agent_init();
+    widget_host_init();
     widget_wpm_status_init();
 
     return 0;

@@ -1156,10 +1156,10 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
 def spec_clock_header(img, d, clock):
     """Big time in the module header (rows 67-92). Mirrors draw_clock() in status.c."""
     if clock is None:
-        lv_text(img, 'jersey_2x', 1, W - 1, 71, 'l', '--:--')
+        lv_text(img, 'jersey_2x', 0, W, 71, 'l', '--:--')
         return
     h, m, ampm = clock
-    lv_text(img, 'jersey_2x', 1, W - 1, 71, 'l', f'{h}:{m:02d}')
+    lv_text(img, 'jersey_2x', 0, W, 71, 'l', f'{h}:{m:02d}')
 
 
 def spec_wpm_label(img, d, wpm, ampm='AM'):
@@ -1433,3 +1433,54 @@ def render_cards_v2():
     out['card_usage'].save('out/mock_card_usage.png')
     preview(out['card_usage'], 4).save('out/mock_card_usage@4x.png')
     return out
+
+
+# ------------------------------------------- combined card: Claude usage + repos & CI (v4 spec)
+
+CROSS5 = glyph(["#...#", ".#.#.", "..#..", ".#.#.", "#...#"])
+CHECK5 = glyph(["....#", "...#.", "#.#..", ".#...", "....."])
+
+
+def lv_fit(font, s, w):
+    """Drops characters from the end until s fits w px. Mirrors fit_text() in status.c."""
+    global LVF
+    LVF = LVF or _lvfonts()
+    f = LVF[font]
+    cut = False
+    while s:
+        last = f.glyphs[s[-1]]
+        if f.width(s) - (last[1] - (last[2] + last[4])) <= w:
+            break
+        s, cut = s[:-1], True
+    return s.rstrip('-_. ') if cut else s
+
+
+def spec_usage_ci(usage=((62, '2:40'), (31, 'TUE')), repos=(('TIMESPACE', 'ok'), ('ZMK-CONFIG', 'fail'), ('SITEDIFF', 'run')),
+                  clock=(10, 18, 'AM'), wpm=64):
+    """Mirrors draw_card() in status.c: rows 103-159 under the clock and the WPM row."""
+    img = spec_left(clock=clock, wpm=[0] * 29 + [wpm])
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 103, W - 1, 159], fill=0)
+    d.line([(0, 104), (W - 1, 104)], fill=1)
+    y = 108
+    for label, item in zip(('5H', 'WK'), usage):
+        lv_text(img, 'silkscreen_bold_8', 1, 14, y, 'l', label)
+        if item is None:
+            lv_text(img, 'silkscreen_8', 0, W, y, 'r', '--')
+        else:
+            pct, reset = item
+            # at 100% the reset time matters most, and '100%' would run into a time like 12:55
+            lv_text(img, 'silkscreen_bold_8', 16, 24, y, 'l', 'MAX' if pct >= 100 else f'{pct}%')
+            lv_text(img, 'silkscreen_8', 0, W, y, 'r', reset)
+            d.rectangle([0, y + 7, W - 1, y + 10], outline=1)
+            if pct:
+                d.rectangle([0, y + 7, (W - 1) * min(pct, 100) // 100, y + 10], fill=1)
+        y += 14
+    d.line([(0, 135), (W - 1, 135)], fill=1)
+    y = 139
+    for name, ci in repos:
+        lv_text(img, 'silkscreen_8', 1, 58, y, 'l', lv_fit('silkscreen_8', name, 58))
+        g = {'ok': CHECK5, 'fail': CROSS5, 'run': RING5}[ci]
+        blit(img, g, W - 1 - len(g[0]), y)
+        y += 7
+    return img

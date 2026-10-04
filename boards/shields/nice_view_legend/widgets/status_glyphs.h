@@ -80,6 +80,33 @@ static const uint16_t glyph_bolt_rows[] = {
 };
 static const struct glyph glyph_bolt = {5, 6, glyph_bolt_rows};
 
+static const uint16_t glyph_ci_ok_rows[] = {
+    0x0001, // ....#
+    0x0002, // ...#.
+    0x0014, // #.#..
+    0x0008, // .#...
+    0x0000, // .....
+};
+static const struct glyph glyph_ci_ok = {5, 5, glyph_ci_ok_rows};
+
+static const uint16_t glyph_ci_fail_rows[] = {
+    0x0011, // #...#
+    0x000a, // .#.#.
+    0x0004, // ..#..
+    0x000a, // .#.#.
+    0x0011, // #...#
+};
+static const struct glyph glyph_ci_fail = {5, 5, glyph_ci_fail_rows};
+
+static const uint16_t glyph_ci_running_rows[] = {
+    0x000e, // .###.
+    0x0011, // #...#
+    0x0011, // #...#
+    0x0011, // #...#
+    0x000e, // .###.
+};
+static const struct glyph glyph_ci_running = {5, 5, glyph_ci_running_rows};
+
 static const uint16_t glyph_slot_mac_rows[] = {
     0x00fe, // .#######.
     0x0082, // .#.....#.

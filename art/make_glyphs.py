@@ -4,12 +4,13 @@ icons are the same pixels as the mockups.
     python3 make_glyphs.py
 """
 import os
-from concepts import CMD, OPT, CTRL, SHIFT, CLAUDE_SPARK, BOLT_G, SLOT_ICONS
+from concepts import CMD, OPT, CTRL, SHIFT, CLAUDE_SPARK, BOLT_G, SLOT_ICONS, CHECK5, CROSS5, RING5
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'boards', 'shields',
                    'nice_view_legend', 'widgets', 'status_glyphs.h')
 GLYPHS = [('glyph_cmd', CMD), ('glyph_opt', OPT), ('glyph_ctrl', CTRL), ('glyph_shift', SHIFT),
-          ('glyph_claude', CLAUDE_SPARK), ('glyph_bolt', BOLT_G)]
+          ('glyph_claude', CLAUDE_SPARK), ('glyph_bolt', BOLT_G),
+          ('glyph_ci_ok', CHECK5), ('glyph_ci_fail', CROSS5), ('glyph_ci_running', RING5)]
 SLOT_NAMES = ['glyph_slot_mac', 'glyph_slot_phone', 'glyph_slot_work', 'glyph_slot_boox', None]
 
 

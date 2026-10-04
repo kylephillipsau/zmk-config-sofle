@@ -8,8 +8,9 @@
 #include <lvgl.h>
 #include <zmk/endpoints.h>
 
+#include "host_link.h"
+
 #define NICEVIEW_PROFILE_COUNT 5
-#define WPM_HISTORY 30
 
 #define CANVAS_SIZE 68
 
@@ -30,22 +31,17 @@ struct status_state {
     bool profiles_bonded[NICEVIEW_PROFILE_COUNT];
     uint8_t layer_index;
     const char *layer_label;
-    uint8_t wpm[WPM_HISTORY];
+    uint8_t wpm;
     int16_t peripheral_battery; // -1 until the right half reports its level
     uint8_t mods;               // held modifier keys, MOD_* bits
-    uint8_t agent;              // Claude Code flags from the host, AGENT_* below
+    uint8_t agent;              // Claude Code flags from the host, AGENT_* in host_link.h
     int32_t clock_base_s;       // host time of day in seconds at clock_sync_ms, or -1 if unknown
     int64_t clock_sync_ms;
+    struct host_card card;      // Claude usage and repo CI from the host
 #else
     bool connected;
 #endif
 };
-
-// Claude Code flags, summed over every session by host/sofle-status and sent in indicator lights
-// macOS doesn't use: Scroll Lock, Compose and Kana.
-#define AGENT_WORKING BIT(0) // some session is working
-#define AGENT_NEEDS BIT(1)   // some session needs you
-#define AGENT_DONE BIT(2)    // a session finished since your last prompt
 
 struct battery_status_state {
     uint8_t level;

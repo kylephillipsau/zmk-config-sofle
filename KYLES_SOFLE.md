@@ -9,8 +9,8 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
 - **Screens:** `boards/shields/nice_view_legend`, a copy of ZMK's nice!view shield.
   - Right: keyboard name at rest; a cheat sheet for layer 1 or 2 while that layer is held. The
     left half relays the active layer (`widgets/legend_layer.c`).
-  - Left: both batteries, layer, Bluetooth slots, held modifiers and caps lock, plus a live WPM
-    chart (`widgets/status.c`).
+  - Left: both batteries, layer, Bluetooth slots and held modifiers, then the clock, WPM, and a
+    card with Claude usage limits and CI for recent repos (`widgets/status.c`).
 - **Joystick:** arrows on the base layer; scrolls (vertical and horizontal) on layers 1 and 2,
   reversed to suit macOS natural scrolling. Scroll speed is tunable live in
   [DYA Studio](https://studio.dya.cormoran.works/).
@@ -25,8 +25,12 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
 - **Clock** on the left screen, synced from the Mac (see [Claude Code status](#claude-code-status)
   for how it travels). 12-hour by default; `CONFIG_NICE_VIEW_LEGEND_CLOCK_24H=y` for 24-hour.
 - **Claude Code status** on the left screen: the ✳ badge lights while Claude is working or waiting
-  on you, and the WPM header turns into a "CLAUDE / NEEDS YOU" (solid) or "CLAUDE / DONE"
-  (outlined) banner. See [Claude Code status](#claude-code-status).
+  on you. See [Claude Code status](#claude-code-status).
+- **Card** under the clock, also fed from the Mac:
+  - Claude's 5 hour and weekly usage limits: percent used, a bar, and when each resets
+    (MAX at 100%);
+  - the 3 repos where you most recently started a Claude Code session or sent a prompt, each with
+    its latest GitHub Actions result: ✓ passed, ✗ failed, ○ running, nothing for no CI.
 
 ## Building
 
@@ -43,35 +47,66 @@ GitHub Actions builds the same targets from `build.yaml` on every push.
 To flash: plug a half in, double-press its reset button, and copy its `.uf2` onto the `NICENANO`
 drive. Keymap and left-screen changes only need the left half; right-screen art needs the right.
 
-## Claude Code status
+## Claude Code status, clock and card
 
-`host/sofle-status` sends three flags to the keyboard in indicator lights macOS doesn't use, as a raw
-HID output report over Bluetooth or USB. The firmware reads them like Caps Lock.
+`host/sofle-status` feeds the left screen from the Mac. Everything travels in keyboard indicator
+lights macOS doesn't use, as raw HID output reports over Bluetooth or USB, and the firmware decodes
+them in `widgets/host_link.c` (the header documents the format).
+
+A report with Num Lock off carries three flags:
 
 | Light | Meaning | On screen |
 |---|---|---|
 | Scroll Lock | some session is working | ✳ badge lit |
-| Compose | some session needs you (permission prompt) | solid CLAUDE / NEEDS YOU banner |
-| Kana | a session finished since your last prompt in any session | outlined CLAUDE / DONE banner |
+| Compose | some session needs you (permission prompt) | ✳ badge lit |
+| Kana | a session finished since your last prompt in any session | nothing yet |
 
-Each Claude Code session keeps its own state in `~/.cache/sofle-status/sessions`, so concurrent
-sessions add up instead of overwriting each other. Claude Code runs `sofle-status hook`
-asynchronously on SessionStart, SessionEnd, UserPromptSubmit, PostToolUse, PermissionRequest,
-Notification, Stop and StopFailure (configured in `~/.claude/settings.json`). States older than 30
-minutes count as stale, and an unchanged result isn't resent for 30 seconds.
+Reports with Num Lock on are a frame, 2 bits per report in Scroll Lock and Compose, with Kana
+alternating so no two reports in a row match. A frame is a type byte, a fixed-length payload and a
+CRC-8: the clock, the usage limits, or one repo row. The next report with Num Lock off ends it and
+carries the flags again. The keyboard drops any frame with the wrong length, a broken Kana
+sequence or a bad CRC, and times in a frame count from its first report.
 
-The clock uses the same lights: a sync is nine reports with Num Lock on, 2 bits each (Scroll Lock,
-Compose), with Kana alternating on every report, carrying the minute of day, the second and an even
-parity bit. The next report, Num Lock off, carries the flags again. The keyboard keeps time between
-syncs and shows `--:--` until the first one. The `au.kyle.sofle-status` launch agent
-(`sofle-status daemon`) syncs when the keyboard connects, including after it wakes, and every 5
-minutes. It needs Input Monitoring (System Settings > Privacy & Security > Input Monitoring >
-sofle-status); macOS ties that to the exact binary, so re-enable it after rebuilding the tool.
+The keyboard can't answer, so the host sends the cards when they change, every 10 minutes, and
+whenever the keyboard reconnects (it forgets everything when it sleeps), with a clock frame first.
+Over Bluetooth a report takes about 300 ms to get through, because ZMK lets the keyboard skip
+radio events while idle, so a card takes 15 to 20 seconds to arrive. Over USB it's about 10 ms.
 
-Install with `host/install.sh` (builds `~/.local/bin/sofle-status` and loads the launch agent). Other commands:
-`sofle-status status` shows every session and the combined flags; `sofle-status
-idle|working|needs|done` shows a state by hand and pauses the hooks; `sofle-status resume` restarts
-them. The keyboard forgets the flags when it sleeps; the next event sets them again.
+Where the data comes from:
+
+- **Flags:** Claude Code runs `sofle-status hook` asynchronously on SessionStart, SessionEnd,
+  UserPromptSubmit, PostToolUse, PermissionRequest, Notification, Stop and StopFailure. Each
+  session keeps its own state in `~/.cache/sofle-status/sessions`, so concurrent sessions add up.
+  States older than 30 minutes count as stale. The flags never wait behind a card: a push ends
+  every frame with the current flags.
+- **Usage:** Claude Code passes `rate_limits` to the status line command,
+  `sofle-status statusline`, which caches them in `usage.json` and prints nothing.
+- **Repos:** SessionStart and UserPromptSubmit record the session's working directory in
+  `projects/`. A push resolves the 3 most recent to git repos and asks `gh run list` about each,
+  every 2 minutes (45 seconds while a run is going). The name is the GitHub repo name.
+
+Both are set in `~/.claude/settings.json` (`hooks` and `statusLine`). When something changes, the
+hook or status line starts `sofle-status push` in the background, which sends whatever changed.
+The `au.kyle.sofle-status` launch agent (`sofle-status daemon`) pushes when the keyboard connects
+and every minute. It needs Input Monitoring (System Settings > Privacy & Security > Input
+Monitoring > sofle-status). `install.sh` signs the binary with an Apple Development certificate
+when there is one, so the permission survives rebuilds.
+
+Install with `host/install.sh` (builds `~/.local/bin/sofle-status` and loads the launch agent).
+Other commands: `sofle-status cards` shows the card and sends it; `sofle-status time` syncs the
+clock; `sofle-status status` shows every session and the combined flags; `sofle-status
+idle|working|needs|done` shows flags by hand and pauses the hooks; `sofle-status resume` restarts
+them.
+
+`host/test_host_link.c` runs the firmware's decoder on the Mac against the reports the host would
+send (`sofle-status encode`), and with `--damage` checks that a dropped, merged or flipped report
+only ever loses its frame:
+
+```
+cc -I boards/shields/nice_view_legend/widgets -o /tmp/test_host_link host/test_host_link.c \
+   boards/shields/nice_view_legend/widgets/host_link.c
+sofle-status encode | /tmp/test_host_link --damage
+```
 
 ## Screen art
 
@@ -79,7 +114,7 @@ Everything on the screens comes from `art/`, rendered with PIL so the mockups an
 
 | Script | Writes |
 |---|---|
-| `art/concepts.py` | the screen designs (mockups go to `art/out/`) |
+| `art/concepts.py` | the screen designs (mockups go to `art/out/`); `spec_left()` and `spec_usage_ci()` mirror the left screen |
 | `art/build_legend.py` | `widgets/legend_art.c`, the right-screen images |
 | `art/make_lvfont.py` | `fonts/*.c`, the pixel fonts as LVGL fonts |
 | `art/make_glyphs.py` | `widgets/status_glyphs.h`, the left-screen icons |
