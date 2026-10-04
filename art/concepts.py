@@ -160,11 +160,13 @@ def dither(img, box, pattern='checker'):
 
 
 def mini_sofle(img, d, cx, y):
-    """A small two-half Eyelash Sofle: column stagger, the thumb row and the encoder knob.
+    """A small two-half Eyelash Sofle: keys, screens, the knob and the joystick.
 
-    Proportions follow boards/shields/eyelash_sofle/eyelash_sofle-layouts.dtsi at 4 px per key:
-    columns 0-1 sit half a key below column 3, and each half's thumb row is three keys under
-    columns 2-4 plus two angled 30 degrees toward the centre, each a step lower.
+    Proportions follow eyelash_sofle-layouts.dtsi and the vendor's case drawing (sofle-low-profile/
+    low-profile sofle flat drawing.dxf) at 4 px per key. Columns 0-1 sit half a key below column
+    3, and each half's thumb row is three keys under columns 2-4 plus two angled toward the centre,
+    each a step lower. Inside each half, a strip by the thumb keys holds the screen and, under it,
+    the encoder knob (left) or the joystick (right).
     """
     stagger = [2, 2, 1, 0, 1, 1]  # outer pinky .. index column offsets
     k, g = 3, 1                   # key size, gap
@@ -179,10 +181,15 @@ def mini_sofle(img, d, cx, y):
         for c, drop in thumbs:
             xx, yy = col_x(c), y + 4 * (k + g) + drop
             d.rectangle([xx, yy, xx + k - 1, yy + k - 1], fill=1)
+        strip = col_x(6) - (1 if mirror else 0)  # 4 px wide, one key's pitch
+        d.rectangle([strip, y + 1, strip + 3, y + 11], outline=1)  # screen
+        ring = (strip - 1) if mirror else strip
+        blit(img, JOYSTICK5 if mirror else RING5, ring, y + 13)
     half(cx - 30, False)
     half(cx + 7, True)
-    # encoder knob on the left half's inner edge
-    d.ellipse([cx - 6, y + 9, cx - 1, y + 14], outline=1)
+
+
+JOYSTICK5 = glyph([".###.", "#...#", "#.#.#", "#...#", ".###."])  # cap with the stick in the middle
 
 
 # ---------------------------------------------------------------- concepts
