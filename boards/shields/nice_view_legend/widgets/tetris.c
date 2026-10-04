@@ -7,7 +7,10 @@
  * art/concepts.py) and drives them.
  *
  * Everything runs on the display work queue: key events only queue an input, and gravity and
- * auto-repeat are delayable work on the same queue, so the game state has one thread.
+ * auto-repeat are delayable work on the same queue, so the game state has one thread. Moves only
+ * ask for a redraw, so a burst of them costs one frame showing the latest state, and blocks are
+ * written straight into the canvas buffers: LVGL's rectangle drawing, five calls a hollow block,
+ * made a frame with a full stack take long enough that the screen lagged several moves behind.
  */
 
 #include <stdio.h>
@@ -96,14 +99,32 @@ static void save_best(void) {
 
 enum block_style { BLOCK_SOLID, BLOCK_HOLLOW, BLOCK_GHOST };
 
+// A w x h rectangle written straight into the canvas buffer, clipped to the frame.
+static void fill_px(const struct frame *f, int x, int y, int w, int h, lv_color_t c) {
+    int y_from = MAX(y, f->y0), y_to = MIN(y + h, f->y0 + CANVAS_SIZE);
+    int x_from = MAX(x, 0), x_to = MIN(x + w, CANVAS_SIZE);
+    for (int row = y_from; row < y_to; row++) {
+        lv_color_t *line = &f->buf[(row - f->y0) * CANVAS_SIZE];
+        for (int col = x_from; col < x_to; col++) {
+            line[col] = c;
+        }
+    }
+}
+
 static void draw_block(const struct frame *f, int x, int y, enum block_style style) {
     lv_color_t ink = LVGL_FOREGROUND;
+    if (y + 5 <= f->y0 || y >= f->y0 + CANVAS_SIZE) {
+        return; // not in this canvas
+    }
     switch (style) {
     case BLOCK_SOLID:
-        fill(f, x, y, 5, 5, ink);
+        fill_px(f, x, y, 5, 5, ink);
         break;
     case BLOCK_HOLLOW:
-        outline(f, x, y, 5, 5, ink);
+        fill_px(f, x, y, 5, 1, ink);
+        fill_px(f, x, y + 4, 5, 1, ink);
+        fill_px(f, x, y + 1, 1, 3, ink);
+        fill_px(f, x + 4, y + 1, 1, 3, ink);
         put_px(f, x + 2, y + 2, ink);
         break;
     case BLOCK_GHOST:
@@ -129,7 +150,12 @@ static void draw_piece(const struct frame *f, int x, int y, enum block_style sty
 }
 
 static void draw_well(const struct frame *f) {
-    outline(f, WELL_X, WELL_Y, TETRIS_W * CELL + 2, TETRIS_H * CELL + 2, LVGL_FOREGROUND);
+    lv_color_t ink = LVGL_FOREGROUND;
+    int w = TETRIS_W * CELL + 2, h = TETRIS_H * CELL + 2;
+    fill_px(f, WELL_X, WELL_Y, w, 1, ink);
+    fill_px(f, WELL_X, WELL_Y + h - 1, w, 1, ink);
+    fill_px(f, WELL_X, WELL_Y, 1, h, ink);
+    fill_px(f, WELL_X + w - 1, WELL_Y, 1, h, ink);
 }
 
 static void draw_title(const struct frame *f) {
@@ -160,13 +186,15 @@ static void draw_play(const struct frame *f) {
     char text[12];
     struct tetris_cell next[4];
 
-    snprintf(text, sizeof(text), "%u", game.score);
-    draw_text(f, &lv_font_silkscreen_bold_8, 1, 44, 23, LV_TEXT_ALIGN_LEFT, ink, text);
-    snprintf(text, sizeof(text), "LEVEL %u", game.level);
-    draw_text(f, &lv_font_silkscreen_8, 1, 44, 31, LV_TEXT_ALIGN_LEFT, ink, text);
-    tetris_cells(game.next, 0, next);
-    for (int i = 0; i < 4; i++) {
-        fill(f, 48 + next[i].x * 4, 24 + next[i].y * 4, 3, 3, ink);
+    if (f->y0 <= 37) { // the header, rows 20-37, is all in the first canvas
+        snprintf(text, sizeof(text), "%u", game.score);
+        draw_text(f, &lv_font_silkscreen_bold_8, 1, 44, 23, LV_TEXT_ALIGN_LEFT, ink, text);
+        snprintf(text, sizeof(text), "LEVEL %u", game.level);
+        draw_text(f, &lv_font_silkscreen_8, 1, 44, 31, LV_TEXT_ALIGN_LEFT, ink, text);
+        tetris_cells(game.next, 0, next);
+        for (int i = 0; i < 4; i++) {
+            fill_px(f, 48 + next[i].x * 4, 24 + next[i].y * 4, 3, 3, ink);
+        }
     }
 
     draw_well(f);
@@ -207,7 +235,7 @@ static void draw_over(const struct frame *f) {
 static void redraw(void) {
     for (int i = 0; i < 3; i++) {
         struct frame f = {.canvas = canvases[i], .buf = bufs[i], .y0 = canvas_y0[i]};
-        fill(&f, 0, f.y0, CANVAS_SIZE, CANVAS_SIZE, LVGL_BACKGROUND);
+        fill_px(&f, 0, f.y0, CANVAS_SIZE, CANVAS_SIZE, LVGL_BACKGROUND);
         switch (game.state) {
         case TETRIS_TITLE:
             draw_title(&f);
@@ -226,6 +254,17 @@ static void redraw(void) {
 /* ---------------------------------------------------------------------------------------------
  * Driving the game
  */
+
+static void redraw_work_cb(struct k_work *work) {
+    if (active) {
+        redraw();
+    }
+}
+
+static K_WORK_DEFINE(redraw_work, redraw_work_cb);
+
+// Draw once the queued work is done: moves that arrive meanwhile share the frame.
+static void request_redraw(void) { k_work_submit_to_queue(zmk_display_work_q(), &redraw_work); }
 
 static void gravity(struct k_work *work);
 static void repeat(struct k_work *work);
@@ -248,7 +287,7 @@ static void after(enum tetris_step step) {
         await_release = held != 0;
         save_best();
     }
-    redraw();
+    request_redraw();
 }
 
 static void gravity(struct k_work *work) {
@@ -270,7 +309,7 @@ static void repeat(struct k_work *work) {
     if (held & (STICK_LEFT | STICK_RIGHT)) {
         tetris_shift(&game, (held & STICK_LEFT) ? -1 : 1);
         k_work_reschedule_for_queue(zmk_display_work_q(), &repeat_work, K_MSEC(REPEAT_MS));
-        redraw();
+        request_redraw();
     } else if (held & STICK_DOWN) {
         enum tetris_step step = tetris_soft_drop(&game);
         if (step != TETRIS_GAME_OVER) {
@@ -284,7 +323,7 @@ static void start(void) {
     best_at_start = game.best;
     tetris_start(&game);
     schedule_gravity();
-    redraw();
+    request_redraw();
 }
 
 static void press(uint8_t stick) {
@@ -309,11 +348,11 @@ static void press(uint8_t stick) {
     case STICK_RIGHT:
         tetris_shift(&game, stick == STICK_LEFT ? -1 : 1);
         k_work_reschedule_for_queue(zmk_display_work_q(), &repeat_work, K_MSEC(REPEAT_DELAY_MS));
-        redraw();
+        request_redraw();
         break;
     case STICK_UP:
         if (!sideways && tetris_rotate(&game)) {
-            redraw();
+            request_redraw();
         }
         break;
     case STICK_DOWN:
