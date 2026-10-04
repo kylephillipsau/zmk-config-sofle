@@ -58,8 +58,14 @@ let manualStates: [String: UInt8] = ["idle": 0, "working": workingBit, "needs": 
 // Session states older than this are treated as stale (a session that crashed or was killed).
 let staleAfter: TimeInterval = 30 * 60
 let resendAfter: TimeInterval = 30
-let cardsResendAfter: TimeInterval = 10 * 60
+let cardsResendAfter: TimeInterval = 30 * 60
 let clockResendAfter: TimeInterval = 60 * 60
+// The keyboard shows the card only while frames keep coming (at least every 15 minutes), so if
+// nothing else went out for this long, a clock frame does.
+let keepaliveAfter: TimeInterval = 10 * 60
+// A usage percentage that changes on its own waits this long between sends; a new reset time or
+// reaching 100% goes at once.
+let usageResendAfter: TimeInterval = 3 * 60
 let ciPollAfter: TimeInterval = 120
 let ciPollWhileRunning: TimeInterval = 45
 let reportInterval: useconds_t = 10_000
@@ -162,7 +168,11 @@ func sendLEDs(_ bits: UInt8, wait: Bool = true) -> Int? {
 func send(_ steps: [Step], wait: Bool = true) -> Int? {
     return withLock(lockFile, wait: wait) {
         var sent = 0
-        for device in keyboards() {
+        // While it's plugged in, the keyboard uses USB and ignores what arrives over Bluetooth,
+        // so don't spend its radio on it. Unplugging starts a push over Bluetooth.
+        let devices = keyboards()
+        let usb = devices.filter { prop($0, kIOHIDTransportKey) == "USB" }
+        for device in usb.isEmpty ? devices : usb {
             let transport = prop(device, kIOHIDTransportKey)
             let opened = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
             guard opened == kIOReturnSuccess else {
@@ -362,14 +372,16 @@ func resetLabel(_ reset: Date, weekly: Bool) -> String {
 }
 
 struct Card {
-    let key: String      // what this card is: usage, repo0..2
+    let key: String      // what this card is: usage, repo0..2, event
     let content: String  // changes when what it shows changes
+    var urgent: String? = nil              // the part of content that can't wait for minInterval
+    var minInterval: TimeInterval = 0      // between sends of changes outside urgent
     let frame: () -> [UInt8]
 }
 
 func usageCard() -> Card {
     let usage = readJSON(usageFile)
-    var content: [String] = []
+    var content: [String] = [], urgent: [String] = []
     var rows: [(pct: UInt8, reset: Date?, label: String)] = []
     for (i, window) in ["five_hour", "seven_day"].enumerated() {
         let entry = usage[window] as? [String: Any] ?? [:]
@@ -382,8 +394,10 @@ func usageCard() -> Card {
         let label = reset.map { resetLabel($0, weekly: i == 1) } ?? ""
         rows.append((pct, reset, label))
         content.append("\(pct) \(Int(reset?.timeIntervalSince1970 ?? 0)) \(label)")
+        urgent.append("\(pct >= 100) \(Int(reset?.timeIntervalSince1970 ?? 0)) \(label)")
     }
-    return Card(key: "usage", content: content.joined(separator: " | ")) {
+    return Card(key: "usage", content: content.joined(separator: " | "), urgent: urgent.joined(separator: " | "),
+                minInterval: usageResendAfter) {
         var body: [UInt8] = [frameUsage]
         for row in rows {
             // minutes until the reset, counted from when the frame's first report arrives
@@ -481,12 +495,23 @@ func ciState(_ slug: String) -> Int? {
     return 0
 }
 
+// Keep each repo on the row it had, so the same repos in a new order don't resend every row. A
+// repo that's new to the list takes the row of one that dropped out.
+func stableOrder(_ repos: [Repo], after previous: [String]) -> [Repo] {
+    var rows: [Repo?] = previous.map { root in repos.first { $0.root == root } }
+    var newcomers = repos.filter { repo in !previous.contains(repo.root) }
+    for i in rows.indices where rows[i] == nil && !newcomers.isEmpty {
+        rows[i] = newcomers.removeFirst()
+    }
+    return rows.compactMap { $0 } + newcomers
+}
+
 // Repo rows from ci.json, polled again when they're due or the recent repos changed.
 func repoRows(poll: Bool) -> [[String: Any]] {
     let cache = readJSON(ciFile)
     let cached = cache["rows"] as? [[String: Any]] ?? []
     guard poll else { return cached }
-    let repos = recentRepos()
+    let repos = stableOrder(recentRepos(), after: cached.compactMap { $0["root"] as? String })
     let sameRepos = repos.map(\.root) == cached.compactMap { $0["root"] as? String }
     if sameRepos, let next = cache["next"] as? Double, Date().timeIntervalSince1970 < next { return cached }
     var rows: [[String: Any]] = []
@@ -606,20 +631,25 @@ func pushOnce(force: Bool, clock: Bool = false) {
     var sent = readJSON(sentFile)
     let reconnected = sent["connection"] as? String != connection
     let now = Date().timeIntervalSince1970
-    let clockDue = clock || reconnected || now - (sent["clock"] as? Double ?? 0) > clockResendAfter
     let due = ([usageCard()] + repoCards(rows) + [eventCard()]).filter { card in
         let last = sent[card.key] as? [String: Any]
-        return force || reconnected || last?["content"] as? String != card.content
-            || now - (last?["at"] as? Double ?? 0) > cardsResendAfter
+        let age = now - (last?["at"] as? Double ?? 0)
+        if force || reconnected || age > cardsResendAfter { return true }
+        guard last?["content"] as? String != card.content else { return false }
+        return card.urgent == nil || last?["urgent"] as? String != card.urgent || age > card.minInterval
     }
+    let lastFrame = sent["last"] as? Double ?? 0
+    let clockDue = clock || reconnected || now - (sent["clock"] as? Double ?? 0) > clockResendAfter
+        || (due.isEmpty && now - lastFrame > keepaliveAfter)
     guard clockDue || !due.isEmpty else { return }
     var flags: UInt8 = 0
     let frames = (clockDue ? [clockFrame] : []) + due.map(\.frame)
     guard let n = send(frameSteps(frames, lastSent: &flags)), n > 0 else { return }
     write(String(flags), to: lastSentFile)
     sent["connection"] = connection
+    sent["last"] = now
     if clockDue { sent["clock"] = now }
-    for card in due { sent[card.key] = ["content": card.content, "at": now] }
+    for card in due { sent[card.key] = ["content": card.content, "urgent": card.urgent ?? "", "at": now] }
     writeJSON(sent, to: sentFile)
 }
 

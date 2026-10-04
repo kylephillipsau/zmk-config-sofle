@@ -80,8 +80,13 @@ CRC-8: the clock, the usage limits, or one repo row. The next report with Num Lo
 carries the flags again. The keyboard drops any frame with the wrong length, a broken Kana
 sequence or a bad CRC, and times in a frame count from its first report.
 
-The keyboard can't answer, so the host sends the cards when they change, every 10 minutes, and
+The keyboard can't answer, so the host sends a card when it changes, every 30 minutes, and
 whenever the keyboard reconnects (it forgets everything when it sleeps), with a clock frame first.
+If nothing else went out for 10 minutes, a clock frame does, so the card stays live. To keep the
+radio quiet, a usage percentage that creeps up waits 3 minutes between sends (a new reset time or
+reaching 100% goes at once), repo rows keep their places when the same repos change order, and
+nothing goes over Bluetooth while the keyboard is plugged in, since it shows what arrives over
+USB then. Unplugging starts a push over Bluetooth.
 
 ZMK asks the Mac for a Bluetooth peripheral latency of 30: while idle, the keyboard listens only
 every 30th connection event, and a report waits about 300 ms to get through (over USB it's about
