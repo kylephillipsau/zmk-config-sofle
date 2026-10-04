@@ -56,7 +56,7 @@ LV_FONT_DECLARE(lv_font_jersey_2x);
 #define MIDDLE_Y 68 // first portrait row of the middle canvas
 #define BOTTOM_Y 136
 
-#define CHART_TOP 96
+#define CHART_TOP 106
 #define CHART_BOTTOM 156
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
@@ -89,6 +89,8 @@ struct mods_state {
 
 struct agent_state {
     uint8_t agent;
+    int32_t clock_base_s;
+    int64_t clock_sync_ms;
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -315,29 +317,57 @@ static void draw_status(lv_obj_t *widget, struct zmk_widget_status *w) {
  * WPM module (middle and bottom canvases)
  */
 
-// The WPM header, or a Claude Code banner while Claude needs you (solid) or has finished (outlined).
-static void draw_agent_header(const struct frame *f, const struct status_state *state) {
-    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
-    char number[4];
+// Big time of day in the module header. The keyboard keeps time from the last sync with the host.
+static void draw_clock(const struct frame *f, const struct status_state *state) {
+    lv_color_t ink = LVGL_FOREGROUND;
+    char text[8];
 
-    if (state->agent & (AGENT_NEEDS | AGENT_DONE)) {
-        bool solid = (state->agent & AGENT_NEEDS) != 0; // needs you wins over done
-        lv_color_t text = solid ? paper : ink;
-
-        if (solid) {
-            fill(f, 0, 67, SCREEN_W, 26, ink);
-        } else {
-            outline(f, 0, 67, SCREEN_W, 26, ink);
-        }
-        draw_text(f, &lv_font_jersey_1x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_CENTER, text, "CLAUDE");
-        draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 84, LV_TEXT_ALIGN_CENTER, text,
-                  solid ? "NEEDS YOU" : "DONE");
+    if (state->clock_base_s < 0) {
+        draw_text(f, &lv_font_jersey_2x, 1, 50, 71, LV_TEXT_ALIGN_LEFT, ink, "--:--");
         return;
     }
 
-    draw_text(f, &lv_font_silkscreen_bold_8, 1, 30, 71, LV_TEXT_ALIGN_LEFT, ink, "WPM");
+    int64_t now_s = state->clock_base_s + (k_uptime_get() - state->clock_sync_ms) / 1000;
+    int minute_of_day = (int)((now_s / 60) % (24 * 60));
+    int hour = minute_of_day / 60, minute = minute_of_day % 60;
+
+#if IS_ENABLED(CONFIG_NICE_VIEW_LEGEND_CLOCK_24H)
+    snprintf(text, sizeof(text), "%d:%02d", hour, minute);
+    draw_text(f, &lv_font_jersey_2x, 1, 66, 71, LV_TEXT_ALIGN_LEFT, ink, text);
+#else
+    snprintf(text, sizeof(text), "%d:%02d", hour % 12 == 0 ? 12 : hour % 12, minute);
+    draw_text(f, &lv_font_jersey_2x, 1, 52, 71, LV_TEXT_ALIGN_LEFT, ink, text);
+    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 71, LV_TEXT_ALIGN_RIGHT, ink,
+              hour < 12 ? "AM" : "PM");
+#endif
+}
+
+static void draw_wpm_label(const struct frame *f, const struct status_state *state) {
+    lv_color_t ink = LVGL_FOREGROUND;
+    char number[4];
+
+    draw_text(f, &lv_font_silkscreen_8, 1, 30, 97, LV_TEXT_ALIGN_LEFT, ink, "WPM");
     snprintf(number, sizeof(number), "%d", state->wpm[WPM_HISTORY - 1]);
-    draw_text(f, &lv_font_jersey_2x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_RIGHT, ink, number);
+    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 97, LV_TEXT_ALIGN_RIGHT, ink, number);
+}
+
+// Claude Code banner over the top of the chart: solid while Claude needs you, outlined when done.
+static void draw_agent_banner(const struct frame *f, const struct status_state *state) {
+    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
+
+    if (!(state->agent & (AGENT_NEEDS | AGENT_DONE))) {
+        return;
+    }
+    bool solid = (state->agent & AGENT_NEEDS) != 0; // needs you wins over done
+    lv_color_t text = solid ? paper : ink;
+
+    fill(f, 0, 94, SCREEN_W, 26, solid ? ink : paper);
+    if (!solid) {
+        outline(f, 0, 94, SCREEN_W, 26, ink);
+    }
+    draw_text(f, &lv_font_jersey_1x, 0, SCREEN_W, 98, LV_TEXT_ALIGN_CENTER, text, "CLAUDE");
+    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 111, LV_TEXT_ALIGN_CENTER, text,
+              solid ? "NEEDS YOU" : "DONE");
 }
 
 static void draw_wpm_into(const struct frame *f, const struct status_state *state) {
@@ -347,7 +377,8 @@ static void draw_wpm_into(const struct frame *f, const struct status_state *stat
     int px[WPM_HISTORY], py[WPM_HISTORY];
 
     fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, paper);
-    draw_agent_header(f, state);
+    draw_clock(f, state);
+    draw_wpm_label(f, state);
 
     for (int i = 0; i < WPM_HISTORY; i++) {
         hi = MAX(hi, hist[i]);
@@ -374,6 +405,7 @@ static void draw_wpm_into(const struct frame *f, const struct status_state *stat
         draw_line(f, px[i], py[i], px[i + 1], py[i + 1], ink);
     }
     fill(f, 0, CHART_BOTTOM + 1, SCREEN_W, 1, ink);
+    draw_agent_banner(f, state);
 }
 
 static void draw_wpm(lv_obj_t *widget, struct zmk_widget_status *w) {
@@ -539,29 +571,104 @@ static struct mods_state mods_get_state(const zmk_event_t *eh) {
 ZMK_DISPLAY_WIDGET_LISTENER(widget_mods, struct mods_state, mods_update_cb, mods_get_state)
 ZMK_SUBSCRIPTION(widget_mods, zmk_keycode_state_changed);
 
+// Redraw the clock at each minute boundary once it has been synced.
+static void clock_tick(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(clock_tick_work, clock_tick);
+
+static void schedule_clock_tick(const struct status_state *state) {
+    if (state->clock_base_s < 0) {
+        return;
+    }
+    int64_t now_ms = (int64_t)state->clock_base_s * 1000 + (k_uptime_get() - state->clock_sync_ms);
+    int64_t until_next_minute = 60000 - (now_ms % 60000);
+    k_work_schedule_for_queue(zmk_display_work_q(), &clock_tick_work,
+                              K_MSEC(until_next_minute + 20));
+}
+
+static void clock_tick(struct k_work *work) {
+    struct zmk_widget_status *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        draw_wpm(widget->obj, widget);
+        schedule_clock_tick(&widget->state);
+    }
+}
+
 static void agent_update_cb(struct agent_state state) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        if (widget->state.agent != state.agent) {
-            widget->state.agent = state.agent;
+        bool agent_changed = widget->state.agent != state.agent;
+        bool clock_changed = widget->state.clock_sync_ms != state.clock_sync_ms ||
+                             widget->state.clock_base_s != state.clock_base_s;
+        if (!agent_changed && !clock_changed) {
+            continue;
+        }
+        widget->state.agent = state.agent;
+        widget->state.clock_base_s = state.clock_base_s;
+        widget->state.clock_sync_ms = state.clock_sync_ms;
+        if (agent_changed) {
             draw_status(widget->obj, widget); // badge
-            draw_wpm(widget->obj, widget);    // banner
+        }
+        draw_wpm(widget->obj, widget); // banner and clock
+        if (clock_changed) {
+            schedule_clock_tick(&widget->state);
         }
     }
 }
 
-// host/sofle-status sends Claude Code's flags in the Scroll Lock, Compose and Kana lights.
-static struct agent_state agent_get_state(const zmk_event_t *eh) {
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    zmk_hid_indicators_t leds = zmk_hid_indicators_get_current_profile();
-    return (struct agent_state){
-        .agent = ((leds & BIT(HID_USAGE_LED_SCROLL_LOCK - 1)) ? AGENT_WORKING : 0) |
-                 ((leds & BIT(HID_USAGE_LED_COMPOSE - 1)) ? AGENT_NEEDS : 0) |
-                 ((leds & BIT(HID_USAGE_LED_KANA - 1)) ? AGENT_DONE : 0),
-    };
-#else
-    return (struct agent_state){.agent = 0};
+#define LED_NUM BIT(HID_USAGE_LED_NUM_LOCK - 1)
+#define LED_SCROLL BIT(HID_USAGE_LED_SCROLL_LOCK - 1)
+#define LED_COMPOSE BIT(HID_USAGE_LED_COMPOSE - 1)
+#define LED_KANA BIT(HID_USAGE_LED_KANA - 1)
+
+// A clock sync is this many reports with Num Lock on, each carrying 2 bits (Scroll Lock, Compose)
+// with Kana alternating 0, 1, 0, ...: 18 bits of minute of day (11), second (6) and even parity.
+// The next report with Num Lock off ends it and carries the Claude flags.
+#define CLOCK_FRAME_REPORTS 9
 #endif
+
+// host/sofle-status sends Claude Code's flags (Scroll Lock, Compose, Kana) and clock syncs in
+// indicator lights macOS doesn't use. Caps Lock is masked out, so it never disturbs either.
+static struct agent_state agent_get_state(const zmk_event_t *eh) {
+    static struct agent_state state = {.clock_base_s = -1};
+#if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+    static int last = -1;
+    static uint32_t frame;
+    static int reports;
+
+    int leds = zmk_hid_indicators_get_current_profile() &
+               (LED_NUM | LED_SCROLL | LED_COMPOSE | LED_KANA);
+    // A report for another endpoint re-raises the current value, so skip repeats.
+    if (leds == last) {
+        return state;
+    }
+    last = leds;
+
+    if (leds & LED_NUM) {
+        bool toggle = (leds & LED_KANA) != 0;
+        if (reports < 0 || reports >= CLOCK_FRAME_REPORTS || toggle != (reports & 1)) {
+            reports = -1; // malformed: ignore the rest of this sync
+        } else {
+            frame = (frame << 2) | ((leds & LED_SCROLL) ? 2 : 0) | ((leds & LED_COMPOSE) ? 1 : 0);
+            reports++;
+        }
+        return state;
+    }
+
+    if (reports == CLOCK_FRAME_REPORTS && __builtin_parity(frame) == 0) {
+        int minute_of_day = frame >> 7, second = (frame >> 1) & 0x3f;
+        if (minute_of_day < 24 * 60 && second < 60) {
+            state.clock_base_s = minute_of_day * 60 + second;
+            state.clock_sync_ms = k_uptime_get();
+        }
+    }
+    reports = 0;
+    frame = 0;
+
+    state.agent = ((leds & LED_SCROLL) ? AGENT_WORKING : 0) |
+                  ((leds & LED_COMPOSE) ? AGENT_NEEDS : 0) | ((leds & LED_KANA) ? AGENT_DONE : 0);
+#endif
+    return state;
 }
 
 ZMK_DISPLAY_WIDGET_LISTENER(widget_agent, struct agent_state, agent_update_cb, agent_get_state)
@@ -600,6 +707,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_canvas_set_buffer(bottom, widget->cbuf3, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
 
     widget->state.peripheral_battery = -1;
+    widget->state.clock_base_s = -1;
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();

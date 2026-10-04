@@ -1086,7 +1086,7 @@ def spec_battery(img, d, x, label, level, charging=False):
 
 
 def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, connected=(1,),
-              bonded=(0, 1, 3), held=(), caps=False, wpm=None, agent='idle'):
+              bonded=(0, 1, 3), held=(), caps=False, wpm=None, agent='idle', clock=(11, 51, 'AM')):
     img, d = new()
     # --- status (top canvas, rows 0..67)
     spec_battery(img, d, 0, 'L', l, charging)
@@ -1128,8 +1128,9 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
     d.rectangle([0, 65, W - 1, 65], fill=1)
     # --- WPM module (middle + bottom canvases, rows 68..159)
     hist = wpm or [0] * 12 + [12, 30, 44, 51, 38, 47, 63, 58, 66, 61, 70, 74, 69, 58, 64, 72, 77, 71]
-    spec_agent_header(img, d, agent, hist[-1])
-    top, bot = 96, 156
+    spec_clock_header(img, d, clock)
+    spec_wpm_label(img, d, hist[-1])
+    top, bot = 106, 156
     hi = max(max(hist), 10)
     n = len(hist)
     pts = [(i * (W - 1) // (n - 1), bot - hist[i] * (bot - top) // hi) for i in range(n)]
@@ -1144,7 +1145,38 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
     for i in range(n - 1):
         bresenham(px, pts[i], pts[i + 1])
     d.rectangle([0, 157, W - 1, 157], fill=1)
+    spec_agent_banner(img, d, agent)
     return img
+
+
+def spec_clock_header(img, d, clock):
+    """Big time in the module header (rows 67-92). Mirrors draw_clock() in status.c."""
+    if clock is None:
+        lv_text(img, 'jersey_2x', 1, 50, 71, 'l', '--:--')
+        return
+    h, m, ampm = clock
+    lv_text(img, 'jersey_2x', 1, 52, 71, 'l', f'{h}:{m:02d}')
+    lv_text(img, 'silkscreen_bold_8', 0, W, 71, 'r', ampm)
+
+
+def spec_wpm_label(img, d, wpm):
+    lv_text(img, 'silkscreen_8', 1, 30, 97, 'l', 'WPM')
+    lv_text(img, 'silkscreen_bold_8', 0, W, 97, 'r', str(wpm))
+
+
+def spec_agent_banner(img, d, agent):
+    """Claude Code banner over the top of the chart (rows 94-119)."""
+    if agent not in ('needs', 'done'):
+        return
+    solid = agent == 'needs'
+    d.rectangle([0, 94, W - 1, 119], fill=0)
+    if solid:
+        d.rectangle([0, 94, W - 1, 119], fill=1)
+    else:
+        d.rectangle([0, 94, W - 1, 119], outline=1)
+    ink = 0 if solid else 1
+    lv_text(img, 'jersey_1x', 0, W, 98, 'c', 'CLAUDE', fill=ink)
+    lv_text(img, 'silkscreen_bold_8', 0, W, 111, 'c', 'NEEDS YOU' if solid else 'DONE', fill=ink)
 
 
 def spec_agent_header(img, d, agent, wpm):
@@ -1191,6 +1223,8 @@ def render_spec():
         'spec_agent_working': spec_left(agent='working'),
         'spec_agent_needs': spec_left(agent='needs'),
         'spec_agent_done': spec_left(agent='done'),
+        'spec_clock_pm': spec_left(clock=(4, 7, 'PM'), agent='working'),
+        'spec_clock_unknown': spec_left(clock=None),
     }
     for k, im in out.items():
         im.save(f'out/mock_{k}.png')

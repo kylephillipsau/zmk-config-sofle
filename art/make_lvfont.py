@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, '..', 'boards', 'shields', 'nice_view_legend', 'fonts')
 
 ASCII = ''.join(chr(c) for c in range(0x20, 0x7F))
-DIGITS = ' %-0123456789'
+DIGITS = ' %-0123456789:'
 
 # (C name, TTF, size in px, characters)
 FONTS = [

@@ -22,6 +22,8 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   its slot is selected.
 - **RGB:** layer 1 + X turns the underglow on in solid red.
 - **Layers** are named BASE / NAV / SYSTEM.
+- **Clock** on the left screen, synced from the Mac (see [Claude Code status](#claude-code-status)
+  for how it travels). 12-hour by default; `CONFIG_NICE_VIEW_LEGEND_CLOCK_24H=y` for 24-hour.
 - **Claude Code status** on the left screen: the ✳ badge lights while Claude is working or waiting
   on you, and the WPM header turns into a "CLAUDE / NEEDS YOU" (solid) or "CLAUDE / DONE"
   (outlined) banner. See [Claude Code status](#claude-code-status).
@@ -58,7 +60,15 @@ asynchronously on SessionStart, SessionEnd, UserPromptSubmit, PostToolUse, Permi
 Notification, Stop and StopFailure (configured in `~/.claude/settings.json`). States older than 30
 minutes count as stale, and an unchanged result isn't resent for 30 seconds.
 
-Install with `host/install.sh` (builds `~/.local/bin/sofle-status`). Other commands:
+The clock uses the same lights: a sync is nine reports with Num Lock on, 2 bits each (Scroll Lock,
+Compose), with Kana alternating on every report, carrying the minute of day, the second and an even
+parity bit. The next report, Num Lock off, carries the flags again. The keyboard keeps time between
+syncs and shows `--:--` until the first one. The `au.kyle.sofle-status` launch agent
+(`sofle-status daemon`) syncs when the keyboard connects, including after it wakes, and every 5
+minutes. It needs Input Monitoring (System Settings > Privacy & Security > Input Monitoring >
+sofle-status); macOS ties that to the exact binary, so re-enable it after rebuilding the tool.
+
+Install with `host/install.sh` (builds `~/.local/bin/sofle-status` and loads the launch agent). Other commands:
 `sofle-status status` shows every session and the combined flags; `sofle-status
 idle|working|needs|done` shows a state by hand and pauses the hooks; `sofle-status resume` restarts
 them. The keyboard forgets the flags when it sleeps; the next event sets them again.

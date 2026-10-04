@@ -9,10 +9,18 @@
 //   Kana         a session finished since your    outlined "CLAUDE / DONE" banner
 //                last prompt in any session
 //
+// The clock is synced with a burst of reports with Num Lock on: nine reports of 2 bits each
+// (Scroll Lock, Compose), with Kana alternating 0, 1, 0, ..., carrying the minute of day, second
+// and an even parity bit. The report after them, Num Lock off, carries the flags again. The
+// keyboard keeps time between syncs.
+//
 // Each Claude Code session keeps its own state in ~/.cache/sofle-status/sessions, so concurrent
 // sessions add up instead of overwriting each other.
 //
 //   sofle-status hook                      read a Claude Code hook event on stdin (used by hooks)
+//   sofle-status time                      sync the keyboard's clock now
+//   sofle-status daemon                    sync the clock on connect and every 5 minutes
+//                                          (run by the au.kyle.sofle-status launch agent)
 //   sofle-status pause | resume            stop or restart hook updates (for testing)
 //   sofle-status idle|working|needs|done   show a state by hand (also pauses hooks)
 //   sofle-status status                    show each session's state and the combined flags
@@ -27,6 +35,7 @@ import IOKit.hid
 let productName = ProcessInfo.processInfo.environment["SOFLE_PRODUCT"] ?? "Kyles Sofle"
 
 // LED output report bits (HID LED usage minus one)
+let numBit: UInt8 = 1 << 0      // marks a clock sync report
 let capsBit: UInt8 = 1 << 1
 let workingBit: UInt8 = 1 << 2  // Scroll Lock
 let needsBit: UInt8 = 1 << 3    // Compose
@@ -44,6 +53,7 @@ let sessionsDir = stateDir.appendingPathComponent("sessions")
 let lastPromptFile = stateDir.appendingPathComponent("last-prompt")
 let lastSentFile = stateDir.appendingPathComponent("last-sent")
 let pausedFile = stateDir.appendingPathComponent("paused")
+let lockFile = stateDir.appendingPathComponent("lock")
 
 func warn(_ message: String) {
     FileHandle.standardError.write("sofle-status: \(message)\n".data(using: .utf8)!)
@@ -68,9 +78,29 @@ func keyboards() -> [IOHIDDevice] {
     }
 }
 
-// Send one LED output report (report ID 1 is ZMK's keyboard report) to each keyboard interface.
+// Hold an exclusive lock while sending, so a clock sync from the daemon and a hook's report can't
+// interleave on the wire.
+func withSendLock<T>(_ body: () -> T) -> T {
+    try? fm.createDirectory(at: stateDir, withIntermediateDirectories: true)
+    let fd = open(lockFile.path, O_CREAT | O_RDWR, 0o644)
+    if fd >= 0 { flock(fd, LOCK_EX) }
+    defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
+    return body()
+}
+
+// Send LED output reports (report ID 1 is ZMK's keyboard report) to each keyboard interface, in
+// order. Returns how many interfaces took them all.
 @discardableResult
 func sendLEDs(_ bits: UInt8) -> Int {
+    return sendSequence([bits])
+}
+
+@discardableResult
+func sendSequence(_ sequence: [UInt8]) -> Int {
+    return withSendLock { sendUnlocked(sequence) }
+}
+
+func sendUnlocked(_ sequence: [UInt8]) -> Int {
     var sent = 0
     for device in keyboards() {
         let opened = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -79,15 +109,20 @@ func sendLEDs(_ bits: UInt8) -> Int {
             continue
         }
         defer { IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone)) }
-        let report: [UInt8] = [0x01, bits]
-        let result = report.withUnsafeBufferPointer {
-            IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 1, $0.baseAddress!, $0.count)
+        var ok = true
+        for (i, bits) in sequence.enumerated() {
+            if i > 0 { usleep(10_000) }
+            let report: [UInt8] = [0x01, bits]
+            let result = report.withUnsafeBufferPointer {
+                IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 1, $0.baseAddress!, $0.count)
+            }
+            if result != kIOReturnSuccess {
+                warn("\(prop(device, kIOHIDTransportKey)) report failed (0x\(String(UInt32(bitPattern: result), radix: 16)))")
+                ok = false
+                break
+            }
         }
-        if result == kIOReturnSuccess {
-            sent += 1
-        } else {
-            warn("\(prop(device, kIOHIDTransportKey)) report failed (0x\(String(UInt32(bitPattern: result), radix: 16)))")
-        }
+        if ok { sent += 1 }
     }
     return sent
 }
@@ -164,6 +199,76 @@ func recordHookEvent() {
     }
 }
 
+// MARK: Clock
+
+// The flags the keyboard should rest on after a clock sync.
+func currentFlags() -> UInt8 {
+    if fm.fileExists(atPath: pausedFile.path) {
+        return (try? String(contentsOf: lastSentFile, encoding: .utf8)).flatMap { UInt8($0) } ?? 0
+    }
+    return aggregate()
+}
+
+// Nine clock reports for the current local time, then the resting flags.
+func clockSequence(resting: UInt8) -> [UInt8] {
+    let now = Calendar.current.dateComponents([.hour, .minute, .second], from: Date())
+    var bits = UInt32(now.hour! * 60 + now.minute!) << 6 | UInt32(now.second!)  // 17 bits
+    bits = bits << 1 | UInt32(bits.nonzeroBitCount & 1)                         // even parity
+    var sequence: [UInt8] = []
+    for i in 0..<9 {
+        let chunk = (bits >> UInt32(16 - 2 * i)) & 3
+        var report = numBit
+        if chunk & 2 != 0 { report |= workingBit }  // Scroll Lock
+        if chunk & 1 != 0 { report |= needsBit }    // Compose
+        if i & 1 != 0 { report |= doneBit }         // Kana toggles on every report
+        sequence.append(withCaps(report))
+    }
+    sequence.append(withCaps(resting))
+    return sequence
+}
+
+@discardableResult
+func syncClock() -> Int {
+    let resting = currentFlags()
+    let sent = sendSequence(clockSequence(resting: resting))
+    if sent > 0 { write(String(resting), to: lastSentFile) }
+    return sent
+}
+
+func log(_ message: String) {
+    let stamp = ISO8601DateFormatter().string(from: Date())
+    FileHandle.standardError.write("\(stamp) \(message)\n".data(using: .utf8)!)
+}
+
+// Sync whenever the keyboard (re)connects, which includes waking from sleep, and every 5 minutes.
+func runDaemon() -> Never {
+    let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    IOHIDManagerSetDeviceMatching(manager, [kIOHIDProductKey: productName] as CFDictionary)
+    IOHIDManagerRegisterDeviceMatchingCallback(manager, { _, _, _, device in
+        guard prop(device, kIOHIDProductKey) == productName,
+              prop(device, kIOHIDPrimaryUsagePageKey) == "1", prop(device, kIOHIDPrimaryUsageKey) == "6" else { return }
+        let transport = prop(device, kIOHIDTransportKey)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            log("keyboard connected via \(transport): synced \(syncClock()) interface(s)")
+        }
+    }, nil)
+    IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+    IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+    Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+        let n = syncClock()
+        if n == 0 { log("periodic sync: keyboard not connected") }
+    }
+    log("sofle-status daemon started")
+    // Opening a keyboard needs Input Monitoring. Terminals usually have it; a launch agent doesn't.
+    // Asking adds sofle-status to System Settings > Privacy & Security > Input Monitoring.
+    if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
+        log("needs Input Monitoring: enable sofle-status in System Settings > Privacy & Security > Input Monitoring")
+        IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+    }
+    RunLoop.main.run()
+    exit(0)
+}
+
 // MARK: Commands
 
 // Earlier versions kept a single cache file at this path; it's a folder now.
@@ -177,6 +282,10 @@ switch args.first {
 case "hook":
     recordHookEvent()
     if !fm.fileExists(atPath: pausedFile.path) { show(aggregate()) }
+case "time":
+    print("clock synced on \(syncClock()) keyboard interface(s)")
+case "daemon":
+    runDaemon()
 case "pause":
     write("", to: pausedFile)
     print("hooks paused; 'sofle-status resume' restarts them")
@@ -208,7 +317,7 @@ case "report":
     let bits = UInt8(args.count > 1 ? args[1] : "0", radix: 16) ?? 0
     print("sent 0x\(String(bits, radix: 16)) to \(sendLEDs(bits)) keyboard interface(s)")
 default:
-    print("usage: sofle-status hook | pause | resume | status | idle|working|needs|done | list | report <hex>")
+    print("usage: sofle-status hook | time | daemon | pause | resume | status | idle|working|needs|done | list | report <hex>")
     exit(2)
 }
 // Exit 0 even when the keyboard is asleep or disconnected, so a Claude Code hook never fails.

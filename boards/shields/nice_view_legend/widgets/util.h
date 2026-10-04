@@ -34,6 +34,8 @@ struct status_state {
     int16_t peripheral_battery; // -1 until the right half reports its level
     uint8_t mods;               // held modifier keys, MOD_* bits
     uint8_t agent;              // Claude Code flags from the host, AGENT_* below
+    int32_t clock_base_s;       // host time of day in seconds at clock_sync_ms, or -1 if unknown
+    int64_t clock_sync_ms;
 #else
     bool connected;
 #endif

@@ -32,6 +32,8 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0x3f, 0xf0, 0xff, 0xcf, 0xff, 0xff, 0xff, 0xf0, 0x3f, 0xc0, 0xff, 0x03, 0xfc, 0x0f, 0x3f, 0xf0, 0xff, 0xcf, 0xff, 0xff, 0xff, 0xf0, 0x3f, 0xc0, 0xff, 0x03, 0xfc, 0x0f, 0xff, 0xff, 0xff, 0xf3, 0xff, 0x0f, 0xfc,
     /* U+0039 "9" */
     0x3f, 0xf0, 0xff, 0xcf, 0xff, 0xff, 0xff, 0xf0, 0x3f, 0xc0, 0xff, 0x03, 0xfc, 0x0f, 0xff, 0xff, 0xff, 0xf3, 0xff, 0xcf, 0xff, 0x00, 0x3c, 0x00, 0xff, 0x03, 0xfc, 0x0f, 0xff, 0xff, 0xff, 0xf3, 0xff, 0x0f, 0xfc,
+    /* U+003A ":" */
+    0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
 };
 
 static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
@@ -49,13 +51,14 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 272, .adv_w = 224, .box_w = 12, .box_h = 20, .ofs_x = 0, .ofs_y = 0},
     {.bitmap_index = 302, .adv_w = 256, .box_w = 14, .box_h = 20, .ofs_x = 0, .ofs_y = 0},
     {.bitmap_index = 337, .adv_w = 256, .box_w = 14, .box_h = 20, .ofs_x = 0, .ofs_y = 0},
+    {.bitmap_index = 372, .adv_w = 96, .box_w = 4, .box_h = 16, .ofs_x = 0, .ofs_y = 0},
 };
 
 static const lv_font_fmt_txt_cmap_t cmaps[] = {
     {.range_start = 32, .range_length = 1, .glyph_id_start = 1, .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},
     {.range_start = 37, .range_length = 1, .glyph_id_start = 2, .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},
     {.range_start = 45, .range_length = 1, .glyph_id_start = 3, .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},
-    {.range_start = 48, .range_length = 10, .glyph_id_start = 4, .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},
+    {.range_start = 48, .range_length = 11, .glyph_id_start = 4, .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},
 };
 
 static lv_font_fmt_txt_glyph_cache_t cache;

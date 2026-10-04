@@ -39,6 +39,9 @@ config NICE_VIEW_WIDGET_STATUS
 config NICE_VIEW_WIDGET_INVERTED
     bool "Invert custom status widget colors"
 
+config NICE_VIEW_LEGEND_CLOCK_24H
+    bool "Show the left screen's clock in 24-hour time"
+
 if !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
 
 config NICE_VIEW_WIDGET_STATUS
