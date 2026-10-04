@@ -115,6 +115,7 @@ void host_link_feed(struct host_link *link, uint8_t leds, int64_t now_ms) {
     int len = link->nbits > 0 && link->nbits % 8 == 0 ? link->nbits / 8 : 0;
     if (len > 0 && len == frame_length(link->buf[0]) && crc8(link->buf, len) == 0) {
         apply_frame(link, link->buf);
+        link->last_frame_ms = now_ms;
     }
     link->nbits = 0;
 

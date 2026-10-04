@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  *
  * Left (central) screen: a status area (both batteries, layer, Bluetooth slots, held modifiers,
- * Claude Code badge) above the clock, WPM, and a card fed by host/sofle-status: Claude usage
- * limits and CI for recent repos. The layout mirrors spec_left() and spec_usage_ci() in
+ * Claude Code badge) above the clock, WPM, and either a card fed by host/sofle-status (Claude
+ * usage limits and CI for recent repos) or, when nothing is feeding it, a live WPM chart. The layout mirrors spec_left() and spec_usage_ci() in
  * art/concepts.py, and the fonts and icons are generated from the same sources, so the mockups
  * match the device.
  *
@@ -27,6 +27,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/battery.h>
 #include <zmk/display.h>
 #include "host_link.h"
+#include "host_link_ble.h"
 #include "status.h"
 #include "status_glyphs.h"
 #include <zmk/events/usb_conn_state_changed.h>
@@ -61,6 +62,11 @@ LV_FONT_DECLARE(lv_font_jersey_2x);
 
 #define USAGE_Y 108 // capitals of the first usage row; rows are 14 px apart
 #define REPOS_Y 139 // capitals of the first repo row; rows are 7 px apart
+#define CHART_TOP 106
+#define CHART_BOTTOM 156
+
+// The host resends every card every 10 minutes, so a card older than this has lost its feed.
+#define CARD_STALE_MS (15 * 60 * 1000)
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -95,6 +101,8 @@ struct host_state {
     int32_t clock_base_s;
     int64_t clock_sync_ms;
     struct host_card card;
+    int64_t card_ms;
+    struct zmk_endpoint_instance card_endpoint;
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -166,6 +174,32 @@ static void draw_text(const struct frame *f, const lv_font_t *font, int x, int w
     init_label_dsc(&dsc, c, font, align);
     dsc.flag |= LV_TEXT_FLAG_EXPAND;
     lv_canvas_draw_text(f->canvas, x, cap_y - cap_top(font) - f->y0, w, &dsc, text);
+}
+
+static void draw_line(const struct frame *f, int x0, int y0, int x1, int y1, lv_color_t c) {
+    int dx = abs(x1 - x0), dy = -abs(y1 - y0);
+    int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+    while (true) {
+        put_px(f, x0, y0, c);
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+        int e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+static int floor_div(int a, int b) {
+    int q = a / b;
+    return (a % b != 0 && ((a < 0) != (b < 0))) ? q - 1 : q;
 }
 
 // Copy text into out, dropping characters from the end until it fits w px, then any '-', '_', '.'
@@ -349,7 +383,7 @@ static void draw_wpm_label(const struct frame *f, const struct status_state *sta
     char number[4];
 
     draw_text(f, &lv_font_silkscreen_8, 1, 30, 97, LV_TEXT_ALIGN_LEFT, ink, "WPM");
-    snprintf(number, sizeof(number), "%d", state->wpm);
+    snprintf(number, sizeof(number), "%d", state->wpm[WPM_HISTORY - 1]);
     draw_text(f, &lv_font_silkscreen_bold_8, 22, 30, 97, LV_TEXT_ALIGN_LEFT, ink, number);
 
 #if !IS_ENABLED(CONFIG_NICE_VIEW_LEGEND_CLOCK_24H)
@@ -427,11 +461,56 @@ static void draw_card(const struct frame *f, const struct status_state *state) {
     }
 }
 
+// Live WPM over the last 30 changes, when there's no card to show.
+static void draw_chart(const struct frame *f, const struct status_state *state) {
+    lv_color_t ink = LVGL_FOREGROUND;
+    const uint8_t *hist = state->wpm;
+    int hi = 10; // floor for the chart scale, so near-zero typing doesn't fill the chart
+    int px[WPM_HISTORY], py[WPM_HISTORY];
+
+    for (int i = 0; i < WPM_HISTORY; i++) {
+        hi = MAX(hi, hist[i]);
+    }
+    for (int i = 0; i < WPM_HISTORY; i++) {
+        px[i] = i * (SCREEN_W - 1) / (WPM_HISTORY - 1);
+        py[i] = CHART_BOTTOM - hist[i] * (CHART_BOTTOM - CHART_TOP) / hi;
+    }
+
+    // checkerboard fill under the line, then the line itself
+    for (int i = 0; i < WPM_HISTORY - 1; i++) {
+        int x_end = px[i + 1] + (i == WPM_HISTORY - 2 ? 1 : 0);
+        for (int x = px[i]; x < x_end; x++) {
+            int y_line = py[i] + floor_div((py[i + 1] - py[i]) * (x - px[i]),
+                                           MAX(1, px[i + 1] - px[i]));
+            for (int y = y_line + 1; y <= CHART_BOTTOM; y++) {
+                if ((x + y) % 2 == 0) {
+                    put_px(f, x, y, ink);
+                }
+            }
+        }
+    }
+    for (int i = 0; i < WPM_HISTORY - 1; i++) {
+        draw_line(f, px[i], py[i], px[i + 1], py[i + 1], ink);
+    }
+    fill(f, 0, CHART_BOTTOM + 1, SCREEN_W, 1, ink);
+}
+
+// The card shows while sofle-status is feeding it: a frame arrived recently, from the endpoint the
+// keyboard is using now. On another device, or once the Mac goes quiet, the WPM chart is back.
+static bool card_live(const struct status_state *state) {
+    return state->card_ms != 0 && k_uptime_get() - state->card_ms < CARD_STALE_MS &&
+           zmk_endpoint_instance_eq(state->card_endpoint, state->selected_endpoint);
+}
+
 static void draw_module_into(const struct frame *f, const struct status_state *state) {
     fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, LVGL_BACKGROUND);
     draw_clock(f, state);
     draw_wpm_label(f, state);
-    draw_card(f, state);
+    if (card_live(state)) {
+        draw_card(f, state);
+    } else {
+        draw_chart(f, state);
+    }
 }
 
 static void draw_module(lv_obj_t *widget, struct zmk_widget_status *w) {
@@ -520,6 +599,7 @@ static void output_status_update_cb(struct output_status_state state) {
             widget->state.profiles_bonded[i] = state.profiles_bonded[i];
         }
         draw_status(widget->obj, widget);
+        draw_module(widget->obj, widget); // the card belongs to the endpoint that sent it
     }
 }
 
@@ -625,7 +705,10 @@ static void host_update_cb(struct host_state state) {
         bool agent_changed = widget->state.agent != state.agent;
         bool clock_changed = widget->state.clock_sync_ms != state.clock_sync_ms ||
                              widget->state.clock_base_s != state.clock_base_s;
-        bool card_changed = memcmp(&widget->state.card, &state.card, sizeof(state.card)) != 0;
+        bool card_changed = memcmp(&widget->state.card, &state.card, sizeof(state.card)) != 0 ||
+                            widget->state.card_ms != state.card_ms ||
+                            !zmk_endpoint_instance_eq(widget->state.card_endpoint,
+                                                      state.card_endpoint);
         if (!agent_changed && !clock_changed && !card_changed) {
             continue;
         }
@@ -633,6 +716,8 @@ static void host_update_cb(struct host_state state) {
         widget->state.clock_base_s = state.clock_base_s;
         widget->state.clock_sync_ms = state.clock_sync_ms;
         widget->state.card = state.card;
+        widget->state.card_ms = state.card_ms;
+        widget->state.card_endpoint = state.card_endpoint;
         if (agent_changed) {
             draw_status(widget->obj, widget); // badge
         }
@@ -650,17 +735,31 @@ static void host_update_cb(struct host_state state) {
 static struct host_state host_get_state(const zmk_event_t *eh) {
     static struct host_link link;
     static bool initialized;
+    static int64_t seen_frame_ms;
+    static struct zmk_endpoint_instance frame_endpoint; // where the last frame came from
     if (!initialized) {
         host_link_init(&link);
         initialized = true;
     }
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    host_link_feed(&link, zmk_hid_indicators_get_current_profile(), k_uptime_get());
+    zmk_hid_indicators_t leds = zmk_hid_indicators_get_current_profile();
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+    if (leds & HOST_LED_NUM) {
+        host_link_ble_frame_report();
+    }
 #endif
+    host_link_feed(&link, leds, k_uptime_get());
+#endif
+    if (link.last_frame_ms != seen_frame_ms) {
+        seen_frame_ms = link.last_frame_ms;
+        frame_endpoint = zmk_endpoints_selected();
+    }
     return (struct host_state){.agent = link.agent,
                                .clock_base_s = link.clock_base_s,
                                .clock_sync_ms = link.clock_sync_ms,
-                               .card = link.card};
+                               .card = link.card,
+                               .card_ms = link.last_frame_ms,
+                               .card_endpoint = frame_endpoint};
 }
 
 ZMK_DISPLAY_WIDGET_LISTENER(widget_host, struct host_state, host_update_cb, host_get_state)
@@ -671,10 +770,8 @@ ZMK_SUBSCRIPTION(widget_host, zmk_hid_indicators_changed);
 static void wpm_status_update_cb(struct wpm_status_state state) {
     struct zmk_widget_status *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        if (widget->state.wpm == state.wpm) {
-            continue;
-        }
-        widget->state.wpm = state.wpm;
+        memmove(widget->state.wpm, widget->state.wpm + 1, WPM_HISTORY - 1);
+        widget->state.wpm[WPM_HISTORY - 1] = state.wpm;
         draw_module(widget->obj, widget);
     }
 }

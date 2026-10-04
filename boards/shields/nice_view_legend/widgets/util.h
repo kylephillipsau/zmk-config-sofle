@@ -11,6 +11,7 @@
 #include "host_link.h"
 
 #define NICEVIEW_PROFILE_COUNT 5
+#define WPM_HISTORY 30
 
 #define CANVAS_SIZE 68
 
@@ -31,13 +32,15 @@ struct status_state {
     bool profiles_bonded[NICEVIEW_PROFILE_COUNT];
     uint8_t layer_index;
     const char *layer_label;
-    uint8_t wpm;
+    uint8_t wpm[WPM_HISTORY];
     int16_t peripheral_battery; // -1 until the right half reports its level
     uint8_t mods;               // held modifier keys, MOD_* bits
     uint8_t agent;              // Claude Code flags from the host, AGENT_* in host_link.h
     int32_t clock_base_s;       // host time of day in seconds at clock_sync_ms, or -1 if unknown
     int64_t clock_sync_ms;
     struct host_card card;      // Claude usage and repo CI from the host
+    int64_t card_ms;            // uptime of the host's last frame, or 0
+    struct zmk_endpoint_instance card_endpoint; // the endpoint it came from
 #else
     bool connected;
 #endif

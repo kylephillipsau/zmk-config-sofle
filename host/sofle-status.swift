@@ -113,12 +113,13 @@ func isKeyboard(_ device: IOHIDDevice) -> Bool {
 
 // Every keyboard interface with the keyboard's product name: Bluetooth and, if plugged in, USB.
 // Filtered by hand because the Mac's own keyboard has the same LED elements and must be left alone.
+// USB comes first: the keyboard shows what arrives over USB while it's plugged in, and USB is fast.
 func keyboards() -> [IOHIDDevice] {
     let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     IOHIDManagerSetDeviceMatching(manager, [kIOHIDProductKey: productName] as CFDictionary)
     IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
     let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> ?? []
-    return devices.filter(isKeyboard)
+    return devices.filter(isKeyboard).sorted { prop($0, kIOHIDTransportKey) == "USB" && prop($1, kIOHIDTransportKey) != "USB" }
 }
 
 // A connection's identity: it changes whenever the keyboard reconnects, which includes waking up,
@@ -613,7 +614,8 @@ func recordHookEvent() -> Bool {
 
 // MARK: Daemon
 
-// Push whenever the keyboard (re)connects, which includes waking from sleep, and every minute.
+// Push whenever the keyboard connects or disconnects, which includes waking from sleep and being
+// unplugged, and every minute.
 func runDaemon() -> Never {
     let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     IOHIDManagerSetDeviceMatching(manager, [kIOHIDProductKey: productName] as CFDictionary)
@@ -625,6 +627,16 @@ func runDaemon() -> Never {
             log("keyboard connected via \(transport)")
         }
     }, nil)
+    // Unplugging moves the keyboard from USB to Bluetooth, and it only shows the card once
+    // something arrives over the connection it's using.
+    IOHIDManagerRegisterDeviceRemovalCallback(manager, { _, _, _, device in
+        guard isKeyboard(device) else { return }
+        let transport = prop(device, kIOHIDTransportKey)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            push()
+            log("keyboard disconnected from \(transport)")
+        }
+    }, nil)
     IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
     IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
     var ticks = 0
@@ -634,9 +646,9 @@ func runDaemon() -> Never {
     }
     log("sofle-status daemon started")
     // Opening a keyboard needs Input Monitoring. Terminals usually have it; a launch agent doesn't.
-    // Asking adds sofle-status to System Settings > Privacy & Security > Input Monitoring.
+    // Asking adds Sofle Status to System Settings > Privacy & Security > Input Monitoring.
     if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
-        log("needs Input Monitoring: enable sofle-status in System Settings > Privacy & Security > Input Monitoring")
+        log("needs Input Monitoring: enable Sofle Status in System Settings > Privacy & Security > Input Monitoring")
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
     RunLoop.main.run()

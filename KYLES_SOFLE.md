@@ -10,7 +10,8 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   - Right: keyboard name at rest; a cheat sheet for layer 1 or 2 while that layer is held. The
     left half relays the active layer (`widgets/legend_layer.c`).
   - Left: both batteries, layer, Bluetooth slots and held modifiers, then the clock, WPM, and a
-    card with Claude usage limits and CI for recent repos (`widgets/status.c`).
+    card with Claude usage limits and CI for recent repos, or a live WPM chart when nothing is
+    feeding the card (`widgets/status.c`).
 - **Joystick:** arrows on the base layer; scrolls (vertical and horizontal) on layers 1 and 2,
   reversed to suit macOS natural scrolling. Scroll speed is tunable live in
   [DYA Studio](https://studio.dya.cormoran.works/).
@@ -31,6 +32,10 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
     (MAX at 100%);
   - the 3 repos where you most recently started a Claude Code session or sent a prompt, each with
     its latest GitHub Actions result: ✓ passed, ✗ failed, ○ running, nothing for no CI.
+
+  The card shows only while the Mac is feeding it: a frame arrived in the last 15 minutes (the
+  Mac resends every 10), over the connection the keyboard is using now. On another Bluetooth slot,
+  or once the Mac sleeps, the WPM chart takes its place.
 
 ## Building
 
@@ -69,8 +74,14 @@ sequence or a bad CRC, and times in a frame count from its first report.
 
 The keyboard can't answer, so the host sends the cards when they change, every 10 minutes, and
 whenever the keyboard reconnects (it forgets everything when it sleeps), with a clock frame first.
-Over Bluetooth a report takes about 300 ms to get through, because ZMK lets the keyboard skip
-radio events while idle, so a card takes 15 to 20 seconds to arrive. Over USB it's about 10 ms.
+
+ZMK asks the Mac for a Bluetooth peripheral latency of 30: while idle, the keyboard listens only
+every 30th connection event, and a report waits about 300 ms to get through (over USB it's about
+10 ms). So when frame reports start arriving over Bluetooth, `widgets/host_link_ble.c` asks for
+latency 0, and asks for latency 30 again 2 seconds after the last one, so idle power use stays the
+same. macOS takes a few seconds to apply a request and reverts ones outside Apple's accessory
+guidelines (an interval range at least 15 ms wide, or exactly 15 ms), so both requests fix the
+interval at 15 ms.
 
 Where the data comes from:
 
@@ -88,11 +99,14 @@ Where the data comes from:
 Both are set in `~/.claude/settings.json` (`hooks` and `statusLine`). When something changes, the
 hook or status line starts `sofle-status push` in the background, which sends whatever changed.
 The `au.kyle.sofle-status` launch agent (`sofle-status daemon`) pushes when the keyboard connects
-and every minute. It needs Input Monitoring (System Settings > Privacy & Security > Input
-Monitoring > sofle-status). `install.sh` signs the binary with an Apple Development certificate
-when there is one, so the permission survives rebuilds.
+or disconnects, and every minute. It needs Input Monitoring (System Settings > Privacy & Security > Input
+Monitoring > Sofle Status).
 
-Install with `host/install.sh` (builds `~/.local/bin/sofle-status` and loads the launch agent).
+Install with `host/install.sh`. It builds `~/Applications/Sofle Status.app`, links
+`~/.local/bin/sofle-status` to it, and loads the launch agent. macOS keeps an app bundle's
+permissions across updates signed with the same certificate (a bare binary lost them on every
+rebuild), so the bundle is signed with an Apple Development certificate when there is one, and
+`install.sh` rebuilds only when the source changed.
 Other commands: `sofle-status cards` shows the card and sends it; `sofle-status time` syncs the
 clock; `sofle-status status` shows every session and the combined flags; `sofle-status
 idle|working|needs|done` shows flags by hand and pauses the hooks; `sofle-status resume` restarts

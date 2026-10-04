@@ -80,6 +80,7 @@ struct host_link {
     uint8_t agent;         // AGENT_* flags
     int32_t clock_base_s;  // host time of day in seconds at clock_sync_ms, or -1 if unknown
     int64_t clock_sync_ms; // uptime of the last clock sync
+    int64_t last_frame_ms; // uptime of the last good frame of any type, or 0
     struct host_card card;
 
     // decoder state
