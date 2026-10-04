@@ -28,6 +28,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/display.h>
 #include "host_link.h"
 #include "host_link_ble.h"
+#include "crash.h"
 #include "draw.h"
 #include "status.h"
 #include "status_glyphs.h"
@@ -492,10 +493,35 @@ static bool card_live(const struct status_state *state) {
            zmk_endpoint_instance_eq(state->card_endpoint, state->selected_endpoint);
 }
 
+// After a crash and reboot: what crashed, where, for a few minutes in place of the card.
+static void draw_crash(const struct frame *f, const struct crash_record *c) {
+    lv_color_t ink = LVGL_FOREGROUND, paper = LVGL_BACKGROUND;
+    char text[24], name[sizeof(c->thread) + 1];
+
+    fill(f, 0, 104, SCREEN_W, 11, ink);
+    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 107, LV_TEXT_ALIGN_CENTER, paper, "CRASHED");
+    snprintf(text, sizeof(text), "WHY %u  #%u", c->reason, c->count);
+    draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 119, LV_TEXT_ALIGN_LEFT, ink, text);
+    snprintf(text, sizeof(text), "PC %08X", c->pc);
+    draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 128, LV_TEXT_ALIGN_LEFT, ink, text);
+    snprintf(text, sizeof(text), "LR %08X", c->lr);
+    draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 137, LV_TEXT_ALIGN_LEFT, ink, text);
+    fit_text(&lv_font_silkscreen_8, c->thread, SCREEN_W - 2, name, sizeof(name));
+    draw_text(f, &lv_font_silkscreen_8, 1, SCREEN_W - 2, 146, LV_TEXT_ALIGN_LEFT, ink, name);
+}
+
 static void draw_module_into(const struct frame *f, const struct status_state *state) {
+    const struct crash_record *crash = crash_last();
     fill(f, 0, f->y0, CANVAS_SIZE, CANVAS_SIZE, LVGL_BACKGROUND);
     draw_clock(f, state);
     draw_wpm_label(f, state);
+    if (crash != NULL && k_uptime_get() < CRASH_SHOW_MS) {
+        draw_crash(f, crash);
+        return;
+    }
+    if (crash != NULL) {
+        crash_forget();
+    }
     if (card_live(state)) {
         draw_card(f, state);
     } else {
