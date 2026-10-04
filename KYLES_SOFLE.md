@@ -49,8 +49,10 @@ Locally, in Docker (the west workspace lives in the `zmk-sofle-ws` volume):
 
 GitHub Actions builds the same targets from `build.yaml` on every push.
 
-To flash: plug a half in, double-press its reset button, and copy its `.uf2` onto the `NICENANO`
-drive. Keymap and left-screen changes only need the left half; right-screen art needs the right.
+To flash: plug a half in, run `./flash.sh left` or `./flash.sh right`, and double-press that
+half's reset button. Both halves mount as `NICENANO`, so the script tells them apart by USB serial
+number (remembered after each half's first flash) and won't put one half's firmware on the other.
+Keymap and left-screen changes only need the left half; right-screen art needs the right.
 
 ## Claude Code status, clock and card
 
