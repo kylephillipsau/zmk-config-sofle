@@ -22,7 +22,11 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   screens (`SLOT_ICONS` in `art/concepts.py`). Slots are assigned by pairing each device while
   its slot is selected.
 - **RGB:** layer 1 + X turns the underglow on in solid red.
-- **Layers** are named BASE / NAV / SYSTEM.
+- **Layers** are named BASE / NAV / SYSTEM / GAME.
+- **Tetris** on the right screen: layer 2 + T toggles the GAME layer, and the joystick plays.
+  Left and right move, up rotates, down drops faster, pressing drops at once; Esc leaves the layer.
+  The stick sends nothing while the layer is on, the game pauses while it's off, and the best
+  score survives restarts. See [Tetris](#tetris).
 - **Clock** on the left screen, synced from the Mac (see [Claude Code status](#claude-code-status)
   for how it travels). 12-hour by default; `CONFIG_NICE_VIEW_LEGEND_CLOCK_24H=y` for 24-hour.
 - **Claude Code status** on the left screen: the ✳ badge lights while Claude is working or waiting
@@ -130,6 +134,26 @@ cc -I boards/shields/nice_view_legend/widgets -o /tmp/test_host_link host/test_h
 sofle-status encode | /tmp/test_host_link --damage
 ```
 
+## Tetris
+
+The rules live in `widgets/tetris_game.c`, plain C with no ZMK or LVGL: a 10 × 20 well, clockwise
+rotation inside each piece's box with kicks of 0, ±1 and ±2 cells, a shuffled bag of all 7 pieces,
+the original game's speeds (level = 1 + lines / 10) and scoring. A landed piece can slide until the
+next gravity tick. `widgets/tetris.c` draws the screens, mirroring `spec_tetris*()` in
+`art/concepts.py`, and runs everything on the display work queue: key events only queue an input,
+and gravity and auto-repeat are delayed work on the same queue. The right half reads the joystick
+itself, since it's that half's first column, so the game needs nothing from the left half except
+the active layer, which it already relays for the legend. The best score is kept in settings.
+
+`host/test_tetris.c` plays 5000 random games and 200 games by a simple placement player on the Mac,
+checking after every move that nothing leaves the well, only full rows clear, and the score never
+drops:
+
+```
+cc -I boards/shields/nice_view_legend/widgets -o /tmp/test_tetris host/test_tetris.c \
+   boards/shields/nice_view_legend/widgets/tetris_game.c && /tmp/test_tetris
+```
+
 ## Screen art
 
 Everything on the screens comes from `art/`, rendered with PIL so the mockups and the device match:
@@ -140,6 +164,9 @@ Everything on the screens comes from `art/`, rendered with PIL so the mockups an
 | `art/build_legend.py` | `widgets/legend_art.c`, the right-screen images |
 | `art/make_lvfont.py` | `fonts/*.c`, the pixel fonts as LVGL fonts |
 | `art/make_glyphs.py` | `widgets/status_glyphs.h`, the left-screen icons |
+
+Both screens draw with the helpers in `widgets/draw.c`: portrait coordinates on 68 × 68 canvases
+that are rotated into the panel's landscape orientation.
 
 If the keymap changes, update the legend text in `art/concepts.py` and re-run `build_legend.py`.
 The fonts in `art/fonts` are under the SIL Open Font License (texts in `art/fonts/LICENSES`).
