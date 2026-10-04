@@ -169,6 +169,7 @@ Everything on the screens comes from `art/`, rendered with PIL so the mockups an
 | `art/build_legend.py` | `widgets/legend_art.c`, the right-screen images |
 | `art/make_lvfont.py` | `fonts/*.c`, the pixel fonts as LVGL fonts |
 | `art/make_glyphs.py` | `widgets/status_glyphs.h`, the left-screen icons |
+| `art/make_readme_images.py` | `docs/images/`, the README's images: every screen in black and white, the plate drawing (`art/sofle_outline.json`, from the seller's case files) with the screens in it, and a Tetris clip played by `host/test_tetris.c --dump` |
 
 Both screens draw with the helpers in `widgets/draw.c`: portrait coordinates on 68 × 68 canvases
 that are rotated into the panel's landscape orientation.

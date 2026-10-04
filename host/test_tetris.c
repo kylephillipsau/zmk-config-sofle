@@ -2,12 +2,15 @@
 //
 //   ./test_tetris          play 5000 random games and 200 by a simple placement player, check
 //                          every step, and print the rotations and a board
+//   ./test_tetris --dump N play one placement game of N pieces and print every frame's state,
+//                          for art/make_readme_images.py
 //
 // Build: cc -I ../boards/shields/nice_view_legend/widgets -o test_tetris test_tetris.c \
 //            ../boards/shields/nice_view_legend/widgets/tetris_game.c
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "tetris_game.h"
 
@@ -127,7 +130,63 @@ static void plan(const struct tetris *t, int *rotations, int *shift) {
     }
 }
 
-int main(void) {
+// One line per frame: state, score, level, next piece, the 20 rows in hex, then the falling piece's
+// cells and where they'd land, as x,y pairs.
+static void dump_frame(const struct tetris *t) {
+    printf("%d %u %u %d", t->state, t->score, t->level, t->next);
+    for (int r = 0; r < TETRIS_H; r++) {
+        printf(" %03x", t->rows[r]);
+    }
+    if (t->state == TETRIS_PLAYING) {
+        struct tetris_cell c[4];
+        tetris_cells(t->piece, t->rot, c);
+        int ghost = tetris_ghost_y(t);
+        for (int i = 0; i < 4; i++) {
+            printf(" %d,%d", t->x + c[i].x, t->y + c[i].y);
+        }
+        for (int i = 0; i < 4; i++) {
+            printf(" %d,%d", t->x + c[i].x, ghost + c[i].y);
+        }
+    }
+    printf("\n");
+}
+
+// A short game for the README: the placement player moves each piece into place, then gravity
+// brings it down, with every other piece hard-dropped to keep the clip moving.
+static int dump_game(int pieces) {
+    struct tetris t;
+    tetris_init(&t, 0x2545f491u, 0);
+    tetris_start(&t);
+    dump_frame(&t);
+    while (t.state == TETRIS_PLAYING && (int)t.pieces < pieces) {
+        int rotations = 0, shift = 0;
+        plan(&t, &rotations, &shift);
+        for (int r = 0; r < rotations; r++) {
+            tetris_rotate(&t);
+            dump_frame(&t);
+        }
+        while (shift != 0 && tetris_shift(&t, shift > 0 ? 1 : -1)) {
+            shift += shift > 0 ? -1 : 1;
+            dump_frame(&t);
+        }
+        if (t.pieces % 2) {
+            tetris_hard_drop(&t);
+            dump_frame(&t);
+            continue;
+        }
+        uint32_t locked = t.pieces;
+        while (t.pieces == locked) {
+            tetris_tick(&t);
+            dump_frame(&t);
+        }
+    }
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "--dump") == 0) {
+        return dump_game(atoi(argv[2]));
+    }
     // the four rotations of each piece, to eyeball
     for (int p = 0; p < TETRIS_PIECES; p++) {
         printf("%c ", names[p]);

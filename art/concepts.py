@@ -1559,8 +1559,9 @@ def tetris_block(d, x, y, style):
 
 
 def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240, level=3,
-                style='hollow', piece_style='solid'):
-    """The right screen during a game. Mirrors widgets/tetris.c."""
+                style='hollow', piece_style='solid', cells=None, ghost_cells=None):
+    """The right screen during a game. Mirrors widgets/tetris.c. cells and ghost_cells, if given,
+    are the falling piece's and its landing spot's (column, row) pairs, for any rotation."""
     img, d = new()
     status_bar(img, d)
     # header: score (up to 999999) and level; the next piece on the right
@@ -1582,6 +1583,12 @@ def spec_tetris(board=None, piece=('T', 4, 3), ghost_y=None, nxt='L', score=1240
         for c, ch in enumerate(row):
             if ch == '#':
                 tetris_block(d, *cell_xy(c, r), style)
+    if cells is not None:
+        for c, r in ghost_cells or []:
+            tetris_block(d, *cell_xy(c, r), 'ghost')
+        for c, r in cells:
+            tetris_block(d, *cell_xy(c, r), piece_style)
+        return img
     if piece is None:  # game over: the piece that didn't fit isn't drawn
         return img
     name, px, py = piece
