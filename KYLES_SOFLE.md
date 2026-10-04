@@ -31,7 +31,10 @@ Personal ZMK config for an Eyelash Sofle, based on the seller's repo
   - Claude's 5 hour and weekly usage limits: percent used, a bar, and when each resets
     (MAX at 100%);
   - the 3 repos where you most recently started a Claude Code session or sent a prompt, each with
-    its latest GitHub Actions result: ✓ passed, ✗ failed, ○ running, nothing for no CI.
+    its latest GitHub Actions result: ✓ passed, ✗ failed, ○ running, nothing for no CI;
+  - from 30 minutes before your next calendar event until 15 minutes after it starts (or its end,
+    if sooner), the event in place of the repos: a bar with "IN 12M" or "NOW" and the start time,
+    then the title over two lines.
 
   The card shows only while the Mac is feeding it: a frame arrived in the last 15 minutes (the
   Mac resends every 10), over the connection the keyboard is using now. On another Bluetooth slot,
@@ -96,12 +99,16 @@ Where the data comes from:
 - **Repos:** SessionStart and UserPromptSubmit record the session's working directory in
   `projects/`. A push resolves the 3 most recent to git repos and asks `gh run list` about each,
   every 2 minutes (45 seconds while a run is going). The name is the GitHub repo name.
+- **Event:** the launch agent reads the Mac's calendars with EventKit every minute and when they
+  change, and caches the next timed event that isn't cancelled or declined in `calendar.json`.
+  Only the agent reads the calendar, so the Calendars permission belongs to Sofle Status rather
+  than your terminal. The keyboard switches between the event and the repos on its own.
 
 Both are set in `~/.claude/settings.json` (`hooks` and `statusLine`). When something changes, the
 hook or status line starts `sofle-status push` in the background, which sends whatever changed.
 The `au.kyle.sofle-status` launch agent (`sofle-status daemon`) pushes when the keyboard connects
-or disconnects, and every minute. It needs Input Monitoring (System Settings > Privacy & Security > Input
-Monitoring > Sofle Status).
+or disconnects, and every minute. It needs Input Monitoring (System Settings > Privacy & Security >
+Input Monitoring > Sofle Status) and asks for Calendars access when it starts.
 
 Install with `host/install.sh`. It builds `~/Applications/Sofle Status.app`, links
 `~/.local/bin/sofle-status` to it, and loads the launch agent. macOS keeps an app bundle's
