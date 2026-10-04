@@ -1061,6 +1061,10 @@ def lv_text(img, font, x, w, cap_y, align, s, fill=1):
     LVF = LVF or _lvfonts()
     f = LVF[font]
     lw = f.width(s)
+    # LVGL wraps text wider than its box (and ':' counts as a break), so treat overflow as a bug.
+    # The trailing advance of the last glyph is spacing, not ink, so allow for it.
+    last_spacing = f.glyphs[s[-1]][1] - (f.glyphs[s[-1]][2] + f.glyphs[s[-1]][4]) if s else 0
+    assert lw - last_spacing <= w, f'{s!r} in {font} is {lw}px wide, box is {w}px'
     if align == 'c':
         x += (w - lw) // 2
     elif align == 'r':
@@ -1129,7 +1133,7 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
     # --- WPM module (middle + bottom canvases, rows 68..159)
     hist = wpm or [0] * 12 + [12, 30, 44, 51, 38, 47, 63, 58, 66, 61, 70, 74, 69, 58, 64, 72, 77, 71]
     spec_clock_header(img, d, clock)
-    spec_wpm_label(img, d, hist[-1])
+    spec_wpm_label(img, d, hist[-1], clock[2] if clock else None)
     top, bot = 106, 156
     hi = max(max(hist), 10)
     n = len(hist)
@@ -1152,16 +1156,17 @@ def spec_left(layer='BASE', l=87, r=92, charging=False, usb=False, active=1, con
 def spec_clock_header(img, d, clock):
     """Big time in the module header (rows 67-92). Mirrors draw_clock() in status.c."""
     if clock is None:
-        lv_text(img, 'jersey_2x', 1, 50, 71, 'l', '--:--')
+        lv_text(img, 'jersey_2x', 1, W - 1, 71, 'l', '--:--')
         return
     h, m, ampm = clock
-    lv_text(img, 'jersey_2x', 1, 52, 71, 'l', f'{h}:{m:02d}')
-    lv_text(img, 'silkscreen_bold_8', 0, W, 71, 'r', ampm)
+    lv_text(img, 'jersey_2x', 1, W - 1, 71, 'l', f'{h}:{m:02d}')
 
 
-def spec_wpm_label(img, d, wpm):
-    lv_text(img, 'silkscreen_8', 1, 30, 97, 'l', 'WPM')
-    lv_text(img, 'silkscreen_bold_8', 0, W, 97, 'r', str(wpm))
+def spec_wpm_label(img, d, wpm, ampm='AM'):
+    lv_text(img, 'silkscreen_8', 1, 30, 97, 'l', f'WPM')
+    lv_text(img, 'silkscreen_bold_8', 22, 30, 97, 'l', str(wpm))
+    if ampm:
+        lv_text(img, 'silkscreen_bold_8', 0, W, 97, 'r', ampm)
 
 
 def spec_agent_banner(img, d, agent):
@@ -1223,7 +1228,7 @@ def render_spec():
         'spec_agent_working': spec_left(agent='working'),
         'spec_agent_needs': spec_left(agent='needs'),
         'spec_agent_done': spec_left(agent='done'),
-        'spec_clock_pm': spec_left(clock=(4, 7, 'PM'), agent='working'),
+        'spec_clock_pm': spec_left(clock=(12, 22, 'PM'), agent='working'),
         'spec_clock_unknown': spec_left(clock=None),
     }
     for k, im in out.items():

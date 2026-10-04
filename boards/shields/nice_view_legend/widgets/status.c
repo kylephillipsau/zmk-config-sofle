@@ -154,11 +154,13 @@ static int cap_top(const lv_font_t *font) {
     return font->line_height - font->base_line - g.box_h - g.ofs_y;
 }
 
-// Draw text aligned within [x, x + w), with the top of its capitals at cap_y.
+// Draw text aligned within [x, x + w), with the top of its capitals at cap_y. Text never wraps:
+// LVGL would otherwise break an overlong string onto a second line (':' counts as a break).
 static void draw_text(const struct frame *f, const lv_font_t *font, int x, int w, int cap_y,
                       lv_text_align_t align, lv_color_t c, const char *text) {
     lv_draw_label_dsc_t dsc;
     init_label_dsc(&dsc, c, font, align);
+    dsc.flag |= LV_TEXT_FLAG_EXPAND;
     lv_canvas_draw_text(f->canvas, x, cap_y - cap_top(font) - f->y0, w, &dsc, text);
 }
 
@@ -323,7 +325,7 @@ static void draw_clock(const struct frame *f, const struct status_state *state) 
     char text[8];
 
     if (state->clock_base_s < 0) {
-        draw_text(f, &lv_font_jersey_2x, 1, 50, 71, LV_TEXT_ALIGN_LEFT, ink, "--:--");
+        draw_text(f, &lv_font_jersey_2x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_LEFT, ink, "--:--");
         return;
     }
 
@@ -331,24 +333,32 @@ static void draw_clock(const struct frame *f, const struct status_state *state) 
     int minute_of_day = (int)((now_s / 60) % (24 * 60));
     int hour = minute_of_day / 60, minute = minute_of_day % 60;
 
+    // The widest times ("12:22", "22:22") need the full width, so AM/PM sits in the row below.
 #if IS_ENABLED(CONFIG_NICE_VIEW_LEGEND_CLOCK_24H)
     snprintf(text, sizeof(text), "%d:%02d", hour, minute);
-    draw_text(f, &lv_font_jersey_2x, 1, 66, 71, LV_TEXT_ALIGN_LEFT, ink, text);
 #else
     snprintf(text, sizeof(text), "%d:%02d", hour % 12 == 0 ? 12 : hour % 12, minute);
-    draw_text(f, &lv_font_jersey_2x, 1, 52, 71, LV_TEXT_ALIGN_LEFT, ink, text);
-    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 71, LV_TEXT_ALIGN_RIGHT, ink,
-              hour < 12 ? "AM" : "PM");
 #endif
+    draw_text(f, &lv_font_jersey_2x, 0, SCREEN_W, 71, LV_TEXT_ALIGN_LEFT, ink, text);
 }
 
+// The small row under the clock: "WPM 61" on the left, AM/PM on the right.
 static void draw_wpm_label(const struct frame *f, const struct status_state *state) {
     lv_color_t ink = LVGL_FOREGROUND;
     char number[4];
 
     draw_text(f, &lv_font_silkscreen_8, 1, 30, 97, LV_TEXT_ALIGN_LEFT, ink, "WPM");
     snprintf(number, sizeof(number), "%d", state->wpm[WPM_HISTORY - 1]);
-    draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 97, LV_TEXT_ALIGN_RIGHT, ink, number);
+    draw_text(f, &lv_font_silkscreen_bold_8, 22, 30, 97, LV_TEXT_ALIGN_LEFT, ink, number);
+
+#if !IS_ENABLED(CONFIG_NICE_VIEW_LEGEND_CLOCK_24H)
+    if (state->clock_base_s >= 0) {
+        int64_t now_s = state->clock_base_s + (k_uptime_get() - state->clock_sync_ms) / 1000;
+        int hour = (int)((now_s / 3600) % 24);
+        draw_text(f, &lv_font_silkscreen_bold_8, 0, SCREEN_W, 97, LV_TEXT_ALIGN_RIGHT, ink,
+                  hour < 12 ? "AM" : "PM");
+    }
+#endif
 }
 
 // Claude Code banner over the top of the chart: solid while Claude needs you, outlined when done.
