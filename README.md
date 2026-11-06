@@ -100,7 +100,19 @@ yet.
 
 ## Keymap
 
-![The keymap's layers, drawn by keymap-drawer](keymap-drawer/eyelash_sofle.svg)
+![How to read the drawings: tap, tap or hold, same as the layer below, does nothing, held to reach this layer, and take care](keymap-drawer/sofle-key.svg)
+
+![Base layer](keymap-drawer/sofle-base.svg)
+![NAV layer: F keys, navigation, mouse and RGB](keymap-drawer/sofle-nav.svg)
+![SYSTEM layer: Bluetooth slots, output, F keys, restart, bootloader and soft off](keymap-drawer/sofle-system.svg)
+
+The GAME layer isn't drawn, as it only changes the joystick. Keys sit in their real positions, from
+the plate drawing in `art/sofle_outline.json`. To redraw the sheets:
+
+```sh
+uvx --from keymap-drawer keymap -c keymap_drawer.config.yaml parse -z config/eyelash_sofle.keymap > keymap-drawer/eyelash_sofle.yaml
+uv run keymap-drawer/draw.py keymap-drawer/blueprint.yaml
+```
 
 - Caps Lock is Esc on a tap and Ctrl on a hold. Both Shifts together turn on Caps Word.
 - The joystick sends arrows, and scrolls in both directions on NAV and SYSTEM.
@@ -144,4 +156,5 @@ firmware reboots and shows the cause on the left screen.
 - Fonts: [Silkscreen](https://github.com/googlefonts/silkscreen) and
   [Jersey 10](https://github.com/scfried/soft-type-jersey), under the SIL Open Font License
   (`art/fonts/LICENSES`).
-- [keymap-drawer](https://github.com/caksoylar/keymap-drawer) draws the keymap.
+- [keymap-drawer](https://github.com/caksoylar/keymap-drawer) parses the keymap, and `keymap-drawer/draw.py` draws it.
+- [osifont](https://github.com/hikikomori82/osifont) is the lettering on the keymap drawings.

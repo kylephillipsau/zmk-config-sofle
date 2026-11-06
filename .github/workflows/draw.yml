@@ -6,13 +6,24 @@ on:
       - "config/**"
       - .github/workflows/draw.yml
       - keymap_drawer.config.yaml
+      - "keymap-drawer/blueprint.yaml"
+      - "keymap-drawer/sofle-board.yaml"
+      - "keymap-drawer/draw.py"
+      - art/sofle_outline.json
 
 jobs:
   draw:
-    uses: caksoylar/keymap-drawer/.github/workflows/draw-zmk.yml@main
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    with:
-      commit_message: "[Draw] ${{ github.event.head_commit.message }}"
-      destination: "commit"
-      fail_on_error: ${{ fromJSON(true) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Parse the keymap
+        run: uvx --from keymap-drawer keymap -c keymap_drawer.config.yaml parse -z config/eyelash_sofle.keymap > keymap-drawer/eyelash_sofle.yaml
+      - name: Draw the sheets
+        run: uv run keymap-drawer/draw.py keymap-drawer/blueprint.yaml
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "[Draw] ${{ github.event.head_commit.message }}"
+          file_pattern: "keymap-drawer/*.svg keymap-drawer/*.yaml"

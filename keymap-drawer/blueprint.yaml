@@ -1,0 +1,11 @@
+# Settings for draw.py
+name: Kyles Sofle
+prefix: sofle
+keymap: keymap-drawer/eyelash_sofle.yaml
+board: keymap-drawer/sofle-board.yaml
+# The Sofle's combos join keys too far apart to draw, so the Base sheet says them in words
+show_combos: false
+sheets:
+  BASE: {file: base, turn: Volume, reach: Both Shifts for Caps Word. Hold Q S Z for 2 s for soft off.}
+  NAV: {file: nav, turn: Scroll, reach: Hold the NAV key. The joystick scrolls.}
+  SYSTEM: {file: system, turn: Spaces, reach: Hold the SYSTEM key. The joystick scrolls.}
