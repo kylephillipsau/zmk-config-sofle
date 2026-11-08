@@ -1,21 +1,23 @@
 # nice!view layer legend
 
-A copy of ZMK's `nice_view` shield (from the cormoran/zmk `v0.3-branch+dya` fork) with a different
-right-hand (peripheral) screen:
+A copy of ZMK's `nice_view` shield, from cormoran's `v0.3-branch+dya` fork of ZMK, with both
+screens replaced.
 
-- **Base layer:** the keyboard's name and a small Sofle drawing.
-- **While a layer key is held:** a cheat sheet for that layer (layer 1: navigation, symbols,
-  F-keys, mouse, RGB; layer 2: Bluetooth slots, output, flash, restart, soft off).
+The left (central) screen, `widgets/status.c`, shows both batteries, the layer, the Bluetooth slots,
+held modifiers, the clock, and the card the Mac feeds through `widgets/host_link.c`. After a crash,
+it shows the cause (`widgets/crash.c`).
 
-The left (central) screen is the stock nice!view status screen.
+The right (peripheral) screen, `widgets/peripheral_status.c`, shows the keyboard's name and a small
+Sofle drawing on Base, and the layer's keys while NAV or SYSTEM is held. On the GAME layer, Tetris
+(`widgets/tetris.c`) takes its place.
 
 ## How it works
 
-`widgets/legend_layer.c` raises a one-byte `zmk_legend_layer_changed` event on the central whenever
-the highest active layer changes, and relays it to the peripheral with the fork's
-`ZMK_RELAY_EVENT_CENTRAL_TO_PERIPHERAL` (needs `CONFIG_ZMK_SPLIT_RELAY_EVENT=y` on both halves).
-`widgets/peripheral_status.c` swaps the image to match, and falls back to the base image whenever
-the link to the central drops.
+`widgets/legend_layer.c` raises a one-byte `zmk_legend_layer_changed` event on the left half
+whenever the highest active layer changes, and relays it to the right half with the fork's
+`ZMK_RELAY_EVENT_CENTRAL_TO_PERIPHERAL`, which needs `CONFIG_ZMK_SPLIT_RELAY_EVENT=y` on both halves.
+`widgets/peripheral_status.c` swaps the image to match, and falls back to Base whenever the link to
+the left half drops.
 
 ## Changing the legends
 
