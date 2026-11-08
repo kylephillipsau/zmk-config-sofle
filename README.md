@@ -1,5 +1,7 @@
 # Kyles Sofle
 
+![Both halves of the Sofle side by side on a dark desk: matte black cases, black keycaps with white legends, and orange Esc and Enter keys](docs/renders/hero.jpg)
+
 ZMK config for a wireless Eyelash Sofle with a nice!view screen on each half. A Mac sends the left
 screen the time, Claude Code usage, GitHub Actions results and the next calendar event. The right
 screen shows the keys on the held layer and runs Tetris. It advertises as Kyles Sofle
@@ -162,6 +164,25 @@ needs the right.
 The frame decoder and the Tetris rules are plain C with no ZMK dependencies, tested on the Mac: the
 decoder against thousands of damaged transfers, the rules over 5,200 games. After a crash, the
 firmware reboots and shows the cause on the left screen.
+
+## Renders
+
+<table>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/renders/top.jpg" alt="Both halves from above, with the knob on the left half and the joystick on the right"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/renders/screens.jpg" alt="Close up of the left half's screen and knob beside the T, G and B keys"></td>
+    <td align="center"><img src="docs/renders/joystick.jpg" alt="Close up of the right half's textured joystick cap beside the H and N keys"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/renders/side.jpg" alt="A low angle along the left half from the orange Esc corner"></td>
+    <td align="center"><img src="docs/renders/pad.jpg" alt="The left half side on, resting on its angled pad"></td>
+  </tr>
+</table>
+
+Rendered in Blender from the seller's 3D models of the MX Sofle: the original case, the acrylic strip
+over the controller, and the angled pad under each half that raises its inner edge.
 
 ## Credits
 
