@@ -234,8 +234,8 @@ mod tests {
 
     #[test]
     fn slugs_come_from_https_and_ssh_remotes() {
-        assert_eq!(github_slug("https://github.com/kylephillipsau/zmk-config-kyles-sofle.git").as_deref(),
-                   Some("kylephillipsau/zmk-config-kyles-sofle"));
+        assert_eq!(github_slug("https://github.com/kylephillipsau/zmk-config-sofle.git").as_deref(),
+                   Some("kylephillipsau/zmk-config-sofle"));
         assert_eq!(github_slug("git@github.com:owner/repo").as_deref(), Some("owner/repo"));
         assert_eq!(github_slug("https://gitlab.com/owner/repo.git"), None);
         assert_eq!(github_slug("https://github.com/owner"), None);
