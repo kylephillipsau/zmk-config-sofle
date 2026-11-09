@@ -8,3 +8,5 @@ firmware/
 art/out/
 __pycache__/
 host/windows/target/
+render/mesh/
+render/out/
