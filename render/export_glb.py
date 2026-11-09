@@ -5,7 +5,7 @@
 glTF carries a Principled BSDF's colour, roughness and metalness and an image plugged straight into
 them, so this swaps the procedural bevels and grain for plain values, tints the screen art to the
 nice!view's ink and grey ahead of time, and makes the acrylic over the controller plain see-through
-plastic. Each half is joined into one mesh.
+plastic. Each part is one mesh, both halves together.
 """
 import bpy, sys, os
 import numpy as np
@@ -98,19 +98,29 @@ for name in ANCHORS:
     centre = sum((ob.matrix_world @ Vector(c) for c in ob.bound_box), Vector()) / 8
     e = bpy.data.objects.new("anchor " + name, None); sc.collection.objects.link(e); e.location = centre
 
-# Bake the modifiers, then join each half into one mesh
+# One mesh per part, both halves together, so the viewer can show a part on its own. Each is
+# named for its part, and the page names the parts it lets you pick.
+PARTS = {
+    "case": ["case_"], "pads": ["pad_"], "plate": ["plate_"], "switches": ["switches_"],
+    "keycaps": ["caps_", "legend "], "screens": ["screen ", "lcd ", "cover_", "pane_"],
+    "knob": ["knob"], "joystick": ["joystick"], "screws": ["screw"],
+}
 bpy.ops.object.select_all(action="DESELECT")
 model = [o for o in bpy.data.collections["model"].all_objects if o.type == "MESH"]
 for o in model: o.select_set(True)
 bpy.context.view_layer.objects.active = model[0]
 bpy.ops.object.convert(target="MESH")
-for half, root in halves.items():
-    parts = [o for o in bpy.data.collections["model"].all_objects if o.type == "MESH" and (o.parent == root or o.parent and o.parent.parent == root)]
+model = [o for o in bpy.data.collections["model"].all_objects if o.type == "MESH"]
+for part, prefixes in PARTS.items():
+    objects = [o for o in model if any(o.name.startswith(x) for x in prefixes)]
     bpy.ops.object.select_all(action="DESELECT")
-    for o in parts: o.select_set(True)
-    bpy.context.view_layer.objects.active = parts[0]
-    bpy.ops.object.join()
-    parts[0].name = parts[0].data.name = {"L": "Left half", "R": "Right half"}[half]
+    for o in objects: o.select_set(True)
+    bpy.context.view_layer.objects.active = objects[0]
+    if len(objects) > 1: bpy.ops.object.join()
+    objects[0].name = objects[0].data.name = part
+    model = [o for o in model if o not in objects[1:]]
+left = [o.name for o in bpy.data.collections["model"].all_objects if o.type == "MESH" and o.name not in PARTS]
+assert not left, f"objects in no part: {left}"
 
 os.makedirs(os.path.dirname(GLB), exist_ok=True)
 bpy.ops.export_scene.gltf(
